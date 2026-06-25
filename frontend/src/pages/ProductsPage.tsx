@@ -1,4 +1,4 @@
-import { FormEvent, useState, useEffect } from "react";
+import { FormEvent, useState, useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   Button, 
@@ -24,6 +24,24 @@ export function ProductsPage() {
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut for F2
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "F2") {
+        e.preventDefault();
+        if (!isFormOpen) {
+          setIsFormOpen(true);
+        }
+        setTimeout(() => {
+          barcodeInputRef.current?.focus();
+        }, 100);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [isFormOpen]);
   
   const references = useQuery({
     queryKey: ["reference-data"],
@@ -183,8 +201,18 @@ export function ProductsPage() {
             <Grid item xs={12} sm={6} md={3}>
               <TextField 
                 label="Barkod" 
+                inputRef={barcodeInputRef}
                 value={form.barcode} 
-                onChange={(e) => setForm({ ...form, barcode: e.target.value })} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setForm(prev => {
+                    const next = { ...prev, barcode: val };
+                    if (!editingProductId) {
+                      next.code = val;
+                    }
+                    return next;
+                  });
+                }} 
                 fullWidth 
               />
             </Grid>
@@ -301,9 +329,10 @@ export function ProductsPage() {
 
       {/* Data Table */}
       <DataTable
-        columns={["Kod", "Ürün Adı", "Marka", "Kategori", "Birim", "Satış Fiyatı", "Durum", "İşlemler"]}
+        columns={["Kod", "Barkod", "Ürün Adı", "Marka", "Kategori", "Birim", "Satış Fiyatı", "Durum", "İşlemler"]}
         rows={(products.data ?? []).map((p) => [
           <Typography variant="body2" fontWeight={700} color="primary.main">{p.code}</Typography>,
+          p.barcode || <span style={{ opacity: 0.5 }}>-</span>,
           p.name,
           p.brandName,
           p.categoryName,
