@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Stack, Typography } from "@mui/material";
+import { Stack, Typography, Box } from "@mui/material";
 import { apiClient } from "../api/apiClient";
 import { ReferenceDataDto } from "../api/types";
 import { DataTable } from "../components/DataTable";
@@ -11,9 +11,20 @@ export function WarehousesPage() {
   });
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="h5" fontWeight={700}>Warehouses</Typography>
-      <DataTable columns={["Name"]} rows={(references.data?.warehouses ?? []).map((w) => [w.name])} />
+    <Stack spacing={3}>
+      <Box>
+        <Typography variant="h5" fontWeight={800}>Depolar</Typography>
+        <Typography color="text.secondary" variant="body2">
+          Kayıtlı depoları ve depolama konumlarını görüntüleyin
+        </Typography>
+      </Box>
+      <DataTable 
+        columns={["Depo Adı", "Depo ID"]} 
+        rows={(references.data?.warehouses ?? []).map((w) => [
+          <Typography variant="body2" fontWeight={700} color="primary.main">{w.name}</Typography>,
+          <Typography variant="body2" color="text.secondary">{w.id}</Typography>
+        ])} 
+      />
     </Stack>
   );
 }

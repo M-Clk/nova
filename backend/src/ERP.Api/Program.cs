@@ -1,6 +1,7 @@
 using ERP.Application;
 using ERP.Infrastructure;
 using ERP.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,7 +22,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ErpDbContext>();
-    db.Database.EnsureCreated();
+    db.Database.Migrate();
 }
 
 app.UseCors("LanClients");

@@ -63,3 +63,48 @@ export type CurrentStockDto = {
   warehouseName: string;
   quantity: number;
 };
+
+// ─── POS Types ───────────────────────────────────────────────────────────────
+
+export type PosProductDto = {
+  id: string;
+  barcode: string;
+  name: string;
+  salePrice: number;
+};
+
+export type TerminalDto = {
+  id: string;
+  code: string;
+  name: string;
+  warehouseId: string;
+  isActive: boolean;
+};
+
+export type CartItem = {
+  productId: string;
+  barcode: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+export type PosCheckoutItemRequest = {
+  productId: string;
+  quantity: number;
+};
+
+export type PosCheckoutRequest = {
+  customerId: string | null;
+  terminalId: string;
+  items: PosCheckoutItemRequest[];
+};
+
+export type PosCheckoutResult = {
+  saleId: string;
+  saleNo: string;
+  totalAmount: number;
+  netAmount: number;
+};
+

@@ -13,6 +13,7 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+    public DbSet<Terminal> Terminals => Set<Terminal>();
     public DbSet<Unit> Units => Set<Unit>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
 
@@ -61,6 +62,22 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
             entity.HasData(new Warehouse { Id = SeedIds.WarehouseId, Name = "Ana Depo" });
         });
 
+        modelBuilder.Entity<Terminal>(entity =>
+        {
+            entity.ToTable("Terminals");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Code).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.HasIndex(x => x.Code).IsUnique();
+            entity.HasOne(x => x.Warehouse).WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasData(
+                new Terminal { Id = SeedIds.Terminal1Id, Code = "KASA-1", Name = "Kasa 1", WarehouseId = SeedIds.WarehouseId, IsActive = true },
+                new Terminal { Id = SeedIds.Terminal2Id, Code = "KASA-2", Name = "Kasa 2", WarehouseId = SeedIds.WarehouseId, IsActive = true },
+                new Terminal { Id = SeedIds.Terminal3Id, Code = "KASA-3", Name = "Kasa 3", WarehouseId = SeedIds.WarehouseId, IsActive = true }
+            );
+        });
+
         modelBuilder.Entity<Customer>(entity =>
         {
             entity.ToTable("Customers");
@@ -100,6 +117,7 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
             entity.Property(x => x.CreatedAt).IsRequired();
             entity.HasIndex(x => x.SaleNo).IsUnique();
             entity.HasOne(x => x.Customer).WithMany(x => x.Sales).HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Terminal).WithMany(x => x.Sales).HasForeignKey(x => x.TerminalId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SaleItem>(entity =>

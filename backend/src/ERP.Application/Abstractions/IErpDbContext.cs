@@ -12,9 +12,11 @@ public interface IErpDbContext
     DbSet<Sale> Sales { get; }
     DbSet<SaleItem> SaleItems { get; }
     DbSet<StockMovement> StockMovements { get; }
+    DbSet<Terminal> Terminals { get; }
     DbSet<Unit> Units { get; }
     DbSet<Warehouse> Warehouses { get; }
 
     Task<IErpTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
+

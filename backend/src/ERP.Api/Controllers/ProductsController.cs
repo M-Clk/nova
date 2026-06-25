@@ -6,7 +6,7 @@ namespace ERP.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ProductsController(IProductService products) : ControllerBase
+public class ProductsController(IProductService products, IPosService pos) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ProductDto>>> Get(CancellationToken cancellationToken)
@@ -16,6 +16,13 @@ public class ProductsController(IProductService products) : ControllerBase
     public async Task<ActionResult<ProductDto>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var product = await products.GetByIdAsync(id, cancellationToken);
+        return product is null ? NotFound() : Ok(product);
+    }
+
+    [HttpGet("barcode/{barcode}")]
+    public async Task<ActionResult<PosProductDto>> GetByBarcode(string barcode, CancellationToken cancellationToken)
+    {
+        var product = await pos.GetProductByBarcodeAsync(barcode, cancellationToken);
         return product is null ? NotFound() : Ok(product);
     }
 
@@ -34,3 +41,4 @@ public class ProductsController(IProductService products) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
         => await products.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
 }
+
