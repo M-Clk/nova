@@ -32,5 +32,15 @@ public class CustomersController(ICustomerService customers) : ControllerBase
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
-        => await customers.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
+    {
+        try
+        {
+            var result = await customers.DeleteAsync(id, cancellationToken);
+            return result ? NoContent() : NotFound();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }

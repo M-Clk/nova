@@ -31,5 +31,21 @@ public class StockController(IStockService stock) : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    [HttpPost("movements/{id:guid}/cancel")]
+    public async Task<IActionResult> CancelMovement(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await stock.CancelMovementAsync(id, cancellationToken);
+            return Ok();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }
 

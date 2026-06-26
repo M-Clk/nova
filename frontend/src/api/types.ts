@@ -54,6 +54,7 @@ export type StockMovementDto = {
   quantity: number;
   unitPrice: number;
   referenceType: string;
+  isCancelled: boolean;
   createdAt: string;
 };
 

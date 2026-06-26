@@ -10,6 +10,7 @@ public interface IStockService
     Task<IReadOnlyList<CurrentStockDto>> GetCurrentAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<StockMovementDto>> GetMovementsAsync(CancellationToken cancellationToken = default);
     Task<StockMovementDto> AddMovementAsync(AddStockMovementRequest request, CancellationToken cancellationToken = default);
+    Task CancelMovementAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
 public class StockService(IErpDbContext db) : IStockService
@@ -22,6 +23,7 @@ public class StockService(IErpDbContext db) : IStockService
         // Group by IDs only (EF Core cannot evaluate navigation props inside GroupBy)
         var grouped = await db.StockMovements
             .AsNoTracking()
+            .Where(x => !x.IsCancelled)
             .GroupBy(x => new { x.ProductId, x.WarehouseId })
             .Select(g => new
             {
@@ -78,6 +80,7 @@ public class StockService(IErpDbContext db) : IStockService
                 x.UnitPrice,
                 x.ReferenceType,
                 x.ReferenceId,
+                x.IsCancelled,
                 x.CreatedAt))
             .ToListAsync(cancellationToken)
             .ContinueWith<IReadOnlyList<StockMovementDto>>(x => x.Result, cancellationToken);
@@ -126,7 +129,28 @@ public class StockService(IErpDbContext db) : IStockService
             movement.UnitPrice,
             movement.ReferenceType,
             movement.ReferenceId,
+            movement.IsCancelled,
             movement.CreatedAt);
+    }
+
+    public async Task CancelMovementAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var movement = await db.StockMovements
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Stock movement not found.");
+
+        if (movement.IsCancelled)
+        {
+            throw new InvalidOperationException("Stock movement is already cancelled.");
+        }
+
+        if (movement.ReferenceType != "MANUAL")
+        {
+            throw new InvalidOperationException("Only manually created stock movements can be cancelled directly.");
+        }
+
+        movement.IsCancelled = true;
+        await db.SaveChangesAsync(cancellationToken);
     }
 }
 

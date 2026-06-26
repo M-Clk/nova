@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Stack, Typography, Grid, Box, Chip, Paper,
   Button, TextField, MenuItem, Collapse, Alert, Snackbar,
-  Autocomplete, InputAdornment, IconButton
+  Autocomplete, InputAdornment, IconButton,
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
@@ -35,6 +36,7 @@ export function StockMovementsPage() {
   const [snack, setSnack] = useState<{ open: boolean; message: string; severity: "success" | "error" | "warning" }>({
     open: false, message: "", severity: "success"
   });
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -96,7 +98,20 @@ export function StockMovementsPage() {
       setSnack({ open: true, message: msg, severity: "error" });
     }
   });
-
+  const cancelMovement = useMutation({
+    mutationFn: async (id: string) => apiClient.post(`/stock/movements/${id}/cancel`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stock-current"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
+      setSnack({ open: true, message: "Stok hareketi başarıyla iptal edildi.", severity: "success" });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        "İptal işlemi sırasında bir hata oluştu.";
+      setSnack({ open: true, message: msg, severity: "error" });
+    }
+  });
   function submit(e: FormEvent) {
     e.preventDefault();
     addMovement.mutate();
@@ -167,12 +182,45 @@ export function StockMovementsPage() {
     }
   };
 
-  const formatQuantity = (type: number, quantity: number) => {
+  const renderCell = (content: ReactNode, isCancelled: boolean, isPrimary: boolean = false) => {
+    if (isCancelled) {
+      return (
+        <Typography
+          variant="body2"
+          sx={{
+            textDecoration: "line-through",
+            color: "text.secondary",
+            fontWeight: isPrimary ? 700 : 400
+          }}
+        >
+          {content}
+        </Typography>
+      );
+    }
+    return content;
+  };
+
+  const formatQuantity = (type: number, quantity: number, isCancelled: boolean) => {
     const isInward = [1, 3, 6].includes(type);
     const isOutward = [2, 4, 7].includes(type);
-    if (isInward) return <Typography color="success.main" variant="body2" fontWeight={750}>+{quantity.toFixed(2)}</Typography>;
-    if (isOutward) return <Typography color="error.main" variant="body2" fontWeight={750}>-{quantity.toFixed(2)}</Typography>;
-    return <Typography variant="body2" fontWeight={600}>{quantity.toFixed(2)}</Typography>;
+    const color = isCancelled
+      ? "text.secondary"
+      : isInward
+        ? "success.main"
+        : isOutward
+          ? "error.main"
+          : "text.primary";
+    const prefix = isInward ? "+" : isOutward ? "-" : "";
+    return (
+      <Typography
+        color={color}
+        variant="body2"
+        fontWeight={750}
+        sx={{ textDecoration: isCancelled ? "line-through" : "none" }}
+      >
+        {prefix}{quantity.toFixed(2)}
+      </Typography>
+    );
   };
 
   const selectedProduct = products.data?.find(p => p.id === form.productId);
@@ -415,21 +463,75 @@ export function StockMovementsPage() {
           Tüm stok işlemlerinin geçmiş kaydı
         </Typography>
         <DataTable
-          columns={["Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih"]}
-          rows={(movements.data ?? []).map(m => [
-            <Typography variant="body2" fontWeight={700} color="primary.main">{m.productCode}</Typography>,
-            m.productName,
-            m.warehouseName,
-            getMovementTypeBadge(m.type),
-            formatQuantity(m.type, m.quantity),
-            fmt(m.unitPrice),
-            m.referenceType
-              ? <Chip label={m.referenceType} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
-              : <span style={{ opacity: 0.5 }}>—</span>,
-            new Date(m.createdAt).toLocaleString("tr-TR")
-          ])}
+          columns={["Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih", "İşlemler"]}
+          rows={(movements.data ?? []).map(m => {
+            const isManual = m.referenceType === "MANUAL";
+            return [
+              renderCell(<Typography variant="body2" fontWeight={700} color="primary.main">{m.productCode}</Typography>, m.isCancelled, true),
+              renderCell(m.productName, m.isCancelled),
+              renderCell(m.warehouseName, m.isCancelled),
+              m.isCancelled ? (
+                <Chip label="İptal Edildi" color="default" size="small" sx={{ fontWeight: 600, minWidth: 110, textDecoration: "line-through" }} />
+              ) : (
+                getMovementTypeBadge(m.type)
+              ),
+              formatQuantity(m.type, m.quantity, m.isCancelled),
+              renderCell(fmt(m.unitPrice), m.isCancelled),
+              m.isCancelled ? (
+                <Chip label="İptal" size="small" variant="outlined" color="error" sx={{ fontSize: "0.7rem" }} />
+              ) : m.referenceType ? (
+                <Chip label={m.referenceType} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+              ) : (
+                <span style={{ opacity: 0.5 }}>—</span>
+              ),
+              renderCell(new Date(m.createdAt).toLocaleString("tr-TR"), m.isCancelled),
+              !m.isCancelled && isManual ? (
+                <Button
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  onClick={() => setCancelTargetId(m.id)}
+                  disabled={cancelMovement.isPending}
+                >
+                  İptal Et
+                </Button>
+              ) : ("")
+            ];
+          })}
         />
       </Box>
+
+      {/* Cancellation Confirmation Dialog */}
+      <Dialog
+        open={Boolean(cancelTargetId)}
+        onClose={() => setCancelTargetId(null)}
+      >
+        <DialogTitle fontWeight={700}>Stok Hareketini İptal Et</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Bu stok hareketini iptal etmek istediğinize emin misiniz? Bu işlem geri alınamaz ve depo stok seviyesi buna göre güncellenecektir.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setCancelTargetId(null)} variant="outlined">
+            Vazgeç
+          </Button>
+          <Button
+            onClick={() => {
+              if (cancelTargetId) {
+                cancelMovement.mutate(cancelTargetId);
+                setCancelTargetId(null);
+              }
+            }}
+            color="error"
+            variant="contained"
+            disabled={cancelMovement.isPending}
+            autoFocus
+          >
+            {cancelMovement.isPending ? "İptal Ediliyor..." : "Hareketi İptal Et"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar */}
       <Snackbar

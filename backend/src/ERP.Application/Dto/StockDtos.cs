@@ -22,6 +22,7 @@ public record StockMovementDto(
     decimal UnitPrice,
     string ReferenceType,
     Guid? ReferenceId,
+    bool IsCancelled,
     DateTime CreatedAt);
 
 /// <summary>

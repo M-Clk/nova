@@ -17,6 +17,8 @@ import {
   IconButton,
   Tooltip,
   Chip,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
@@ -195,6 +197,11 @@ export function CustomersPage() {
   // Silme onay dialog
   const [deleteTarget, setDeleteTarget] = useState<CustomerDto | null>(null);
 
+  // Bildirimler
+  const [snack, setSnack] = useState<{ open: boolean; message: string; severity: "success" | "error" | "warning" }>({
+    open: false, message: "", severity: "success"
+  });
+
   // ── Queries & Mutations ──────────────────────────────────────────────────
 
   const customersQuery = useQuery({
@@ -209,7 +216,12 @@ export function CustomersPage() {
       setForm({ code: "", name: "", phone: "" });
       setIsFormOpen(false);
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setSnack({ open: true, message: "Müşteri başarıyla eklendi.", severity: "success" });
     },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || "Müşteri eklenirken bir hata oluştu.";
+      setSnack({ open: true, message: msg, severity: "error" });
+    }
   });
 
   const update = useMutation({
@@ -218,7 +230,12 @@ export function CustomersPage() {
     onSuccess: () => {
       setEditTarget(null);
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setSnack({ open: true, message: "Müşteri bilgileri güncellendi.", severity: "success" });
     },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || "Müşteri güncellenirken bir hata oluştu.";
+      setSnack({ open: true, message: msg, severity: "error" });
+    }
   });
 
   const remove = useMutation({
@@ -227,7 +244,12 @@ export function CustomersPage() {
     onSuccess: () => {
       setDeleteTarget(null);
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setSnack({ open: true, message: "Müşteri başarıyla silindi.", severity: "success" });
     },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || "Müşteri silinirken bir hata oluştu.";
+      setSnack({ open: true, message: msg, severity: "error" });
+    }
   });
 
   // ── Filtreleme ────────────────────────────────────────────────────────────
@@ -445,6 +467,23 @@ export function CustomersPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={4000}
+        onClose={() => setSnack(s => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity={snack.severity}
+          variant="filled"
+          onClose={() => setSnack(s => ({ ...s, open: false }))}
+          sx={{ borderRadius: 2, fontWeight: 600 }}
+        >
+          {snack.message}
+        </Alert>
+      </Snackbar>
     </Stack>
   );
 }
