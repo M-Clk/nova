@@ -1,12 +1,15 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Stack, Typography, Grid, Box, Chip, Paper,
-  Button, TextField, MenuItem, Collapse, Alert, Snackbar
+  Button, TextField, MenuItem, Collapse, Alert, Snackbar,
+  Autocomplete, InputAdornment, IconButton
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import WarehouseIcon from "@mui/icons-material/Warehouse";
+import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
+import ClearIcon from "@mui/icons-material/Clear";
 import { apiClient } from "../api/apiClient";
 import {
   CurrentStockDto, StockMovementDto, ProductDto,
@@ -28,9 +31,28 @@ const MANUAL_MOVEMENT_TYPES = [
 export function StockMovementsPage() {
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [snack, setSnack] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
+  const [barcodeSearch, setBarcodeSearch] = useState("");
+  const [snack, setSnack] = useState<{ open: boolean; message: string; severity: "success" | "error" | "warning" }>({
     open: false, message: "", severity: "success"
   });
+
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "F2") {
+        e.preventDefault();
+        // Automatically open the form if it's closed, then focus
+        setIsFormOpen(true);
+        // We wait a tiny bit for the Collapse animation or element render to complete if it's opening
+        setTimeout(() => {
+          barcodeInputRef.current?.focus();
+        }, 100);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
 
   const [form, setForm] = useState<AddStockMovementRequest>({
     productId: "",
@@ -61,6 +83,7 @@ export function StockMovementsPage() {
     mutationFn: async () => apiClient.post<StockMovementDto>("/stock/movements", form),
     onSuccess: () => {
       setForm({ productId: "", warehouseId: "", type: 1, quantity: 1, unitPrice: 0 });
+      setBarcodeSearch("");
       setIsFormOpen(false);
       queryClient.invalidateQueries({ queryKey: ["stock-current"] });
       queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
@@ -87,6 +110,48 @@ export function StockMovementsPage() {
       productId,
       unitPrice: product?.purchasePrice ?? 0,
     }));
+  };
+
+  // Scan product by barcode
+  const handleBarcodeScan = async (barcode: string) => {
+    const code = barcode.trim();
+    if (!code) return;
+
+    try {
+      // Find locally first to avoid network request if already loaded
+      const localProduct = products.data?.find(p => p.barcode === code);
+      if (localProduct) {
+        setForm(f => ({
+          ...f,
+          productId: localProduct.id,
+          unitPrice: localProduct.purchasePrice ?? 0,
+        }));
+        setBarcodeSearch("");
+        setSnack({ open: true, message: `Ürün bulundu: ${localProduct.name}`, severity: "success" });
+        return;
+      }
+
+      // Fallback to API if not in local list yet
+      const { data: posProd } = await apiClient.get<{ id: string; name: string }>(`/products/barcode/${encodeURIComponent(code)}`);
+      if (posProd) {
+        const { data: fullProduct } = await apiClient.get<ProductDto>(`/products/${posProd.id}`);
+        if (fullProduct) {
+          // Refetch products list to keep in sync
+          queryClient.invalidateQueries({ queryKey: ["products"] });
+          setForm(f => ({
+            ...f,
+            productId: fullProduct.id,
+            unitPrice: fullProduct.purchasePrice ?? 0,
+          }));
+          setBarcodeSearch("");
+          setSnack({ open: true, message: `Ürün bulundu: ${fullProduct.name}`, severity: "success" });
+        }
+      } else {
+        setSnack({ open: true, message: `Barkod bulunamadı: ${code}`, severity: "warning" });
+      }
+    } catch {
+      setSnack({ open: true, message: `Barkod bulunamadı veya hata oluştu: ${code}`, severity: "warning" });
+    }
   };
 
   const getMovementTypeBadge = (type: number) => {
@@ -151,27 +216,79 @@ export function StockMovementsPage() {
             </Box>
 
             <Grid container spacing={2.5}>
-              {/* Product */}
+              {/* Barcode Scan Field */}
               <Grid item xs={12} sm={6} md={4}>
                 <TextField
-                  select
-                  label="Ürün"
-                  value={form.productId}
-                  onChange={e => handleProductChange(e.target.value)}
-                  required
+                  inputRef={barcodeInputRef}
+                  label="Barkod Okutun"
+                  placeholder="Barkod okutup Enter'a basın..."
+                  value={barcodeSearch}
+                  onChange={e => setBarcodeSearch(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleBarcodeScan(barcodeSearch);
+                    }
+                  }}
                   fullWidth
                   size="small"
-                >
-                  {(products.data ?? []).map(p => (
-                    <MenuItem key={p.id} value={p.id}>
-                      {p.code} — {p.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <QrCodeScannerIcon color="primary" fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: barcodeSearch ? (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setBarcodeSearch("")}>
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : null,
+                  }}
+                />
+              </Grid>
+
+              {/* Product Search (Autocomplete) */}
+              <Grid item xs={12} sm={6} md={4}>
+                <Autocomplete
+                  options={products.data ?? []}
+                  getOptionLabel={(option) => `${option.code} — ${option.name} (${option.barcode})`}
+                  filterOptions={(options, state) => {
+                    const search = state.inputValue.toLowerCase().trim();
+                    if (!search) return options.slice(0, 50);
+                    return options
+                      .filter(
+                        (o) =>
+                          o.name.toLowerCase().includes(search) ||
+                          o.code.toLowerCase().includes(search) ||
+                          o.barcode.toLowerCase().includes(search)
+                      )
+                      .slice(0, 50); // Limit to 50 options to prevent lag
+                  }}
+                  value={selectedProduct || null}
+                  onChange={(_, newValue) => {
+                    if (newValue) {
+                      handleProductChange(newValue.id);
+                    } else {
+                      setForm(f => ({ ...f, productId: "", unitPrice: 0 }));
+                    }
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Ürün Seç / Ara"
+                      placeholder="Ürün adı veya kod yazın..."
+                      size="small"
+                      required
+                    />
+                  )}
+                  noOptionsText="Ürün bulunamadı"
+                />
               </Grid>
 
               {/* Warehouse */}
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   select
                   label="Depo"
@@ -188,7 +305,7 @@ export function StockMovementsPage() {
               </Grid>
 
               {/* Movement Type */}
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   select
                   label="Hareket Tipi"
@@ -205,7 +322,7 @@ export function StockMovementsPage() {
               </Grid>
 
               {/* Quantity */}
-              <Grid item xs={12} sm={3} md={1}>
+              <Grid item xs={12} sm={3} md={4}>
                 <TextField
                   label="Miktar"
                   type="number"
@@ -219,7 +336,7 @@ export function StockMovementsPage() {
               </Grid>
 
               {/* Unit Price */}
-              <Grid item xs={12} sm={3} md={1}>
+              <Grid item xs={12} sm={3} md={4}>
                 <TextField
                   label="Birim Fiyat (₺)"
                   type="number"

@@ -70,6 +70,12 @@ public class CustomerService(IErpDbContext db) : ICustomerService
             return false;
         }
 
+        var hasSales = await db.Sales.AnyAsync(x => x.CustomerId == id, cancellationToken);
+        if (hasSales)
+        {
+            throw new InvalidOperationException("Bu müşteriye ait aktif satış veya POS kayıtları bulunduğundan müşteri silinemez.");
+        }
+
         db.Customers.Remove(customer);
         await db.SaveChangesAsync(cancellationToken);
         return true;
