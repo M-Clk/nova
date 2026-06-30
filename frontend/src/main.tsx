@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   AppBar,
   Box,
@@ -83,6 +83,14 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+function AllowedRolesRoute({ roles, children }: { roles: string[]; children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!user || !roles.includes(user.role)) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+}
+
 // ─── Navigation Content ───────────────────────────────────────────────────────
 
 function NavigationContent({ onClose }: { onClose?: () => void }) {
@@ -93,7 +101,9 @@ function NavigationContent({ onClose }: { onClose?: () => void }) {
   const menuItems = [
     { to: "/", label: "Genel Bakış", icon: <DashboardOutlinedIcon /> },
     { to: "/products", label: "Ürünler", icon: <Inventory2OutlinedIcon /> },
-    { to: "/sales", label: "Satışlar", icon: <MonetizationOnOutlinedIcon /> },
+    ...((user?.role === "Admin" || user?.role === "Manager")
+      ? [{ to: "/sales", label: "Satışlar", icon: <MonetizationOnOutlinedIcon /> }]
+      : []),
     { to: "/stock", label: "Stok Hareketleri", icon: <SwapHorizOutlinedIcon /> },
     { to: "/customers", label: "Müşteriler", icon: <PeopleOutlinedIcon /> },
     { to: "/warehouses", label: "Depolar", icon: <BusinessOutlinedIcon /> },
@@ -342,12 +352,12 @@ function App() {
                 <Route element={<MainLayout />}>
                   <Route index element={<DashboardPage />} />
                   <Route path="products" element={<ProductsPage />} />
-                  <Route path="sales" element={<SalesPage />} />
+                  <Route path="sales" element={<AllowedRolesRoute roles={["Admin", "Manager"]}><SalesPage /></AllowedRolesRoute>} />
                   <Route path="stock" element={<StockMovementsPage />} />
                   <Route path="customers" element={<CustomersPage />} />
                   <Route path="warehouses" element={<WarehousesPage />} />
                   <Route path="pos" element={<POSPage />} />
-                  <Route path="users" element={<UsersPage />} />
+                  <Route path="users" element={<AllowedRolesRoute roles={["Admin"]}><UsersPage /></AllowedRolesRoute>} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
               </Route>
