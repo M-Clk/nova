@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -50,6 +50,9 @@ import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
+import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
+import StarOutlineIcon from "@mui/icons-material/StarOutline";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 
 import { useThemeMode } from "../theme/ThemeContext";
 import { useAuth } from "../auth/AuthContext";
@@ -61,7 +64,11 @@ import {
   UpdateTerminalRequest,
   WarehouseDto,
   CreateWarehouseRequest,
-  UpdateWarehouseRequest
+  UpdateWarehouseRequest,
+  ReferenceDataDto,
+  LookupDto,
+  CreateLookupRequest,
+  UpdateLookupRequest
 } from "../api/types";
 
 // ─── Role badge ────────────────────────────────────────────────────────────────
@@ -602,13 +609,734 @@ function TerminalsTab() {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
-export function SettingsPage() {
-  const { mode, toggleColorMode } = useThemeMode();
+// ─── Markalar Tab ───────────────────────────────────────────────────────────────
+
+function BrandsTab() {
+  const qc = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<LookupDto | null>(null);
+  const [formName, setFormName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<LookupDto | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const { data: references, isLoading } = useQuery<ReferenceDataDto>({
+    queryKey: ["reference-data"],
+    queryFn: async () => (await apiClient.get<ReferenceDataDto>("/reference-data")).data
+  });
+
+  const brands = references?.brands ?? [];
+
+  const openCreate = () => {
+    setEditTarget(null);
+    setFormName("");
+    setErrorMsg("");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (b: LookupDto) => {
+    setEditTarget(b);
+    setFormName(b.name);
+    setErrorMsg("");
+    setDialogOpen(true);
+  };
+
+  const createMutation = useMutation({
+    mutationFn: (req: CreateLookupRequest) =>
+      apiClient.post<LookupDto>("/reference-data/brands", req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reference-data"] });
+      setDialogOpen(false);
+    },
+    onError: (err: any) => setErrorMsg(err.response?.data?.error ?? "Bir hata oluştu.")
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, req }: { id: string; req: UpdateLookupRequest }) =>
+      apiClient.put(`/reference-data/brands/${id}`, req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reference-data"] });
+      setDialogOpen(false);
+    },
+    onError: (err: any) => setErrorMsg(err.response?.data?.error ?? "Bir hata oluştu.")
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/reference-data/brands/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reference-data"] });
+      setDeleteTarget(null);
+    },
+    onError: (err: any) => setErrorMsg(err.response?.data?.error ?? "Silinemedi.")
+  });
+
+  const handleSave = () => {
+    if (!formName.trim()) return;
+    if (editTarget) {
+      updateMutation.mutate({ id: editTarget.id, req: { name: formName } });
+    } else {
+      createMutation.mutate({ name: formName });
+    }
+  };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  return (
+    <Box>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+        <Button
+          variant="contained"
+          startIcon={<AddOutlinedIcon />}
+          onClick={openCreate}
+          size="small"
+          sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+        >
+          Yeni Marka
+        </Button>
+      </Box>
+
+      {isLoading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress size={32} />
+        </Box>
+      ) : (
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ "& th": { fontWeight: 700, fontSize: "0.78rem", color: "text.secondary" } }}>
+                <TableCell>Marka Adı</TableCell>
+                <TableCell align="right">İşlemler</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {brands.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={2} align="center" sx={{ py: 4, color: "text.disabled" }}>
+                    Henüz marka tanımlanmamış.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                brands.map((b) => (
+                  <TableRow key={b.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={600}>{b.name}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Düzenle">
+                        <IconButton size="small" onClick={() => openEdit(b)}>
+                          <EditOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Sil">
+                        <IconButton size="small" color="error" onClick={() => { setDeleteTarget(b); setErrorMsg(""); }}>
+                          <DeleteOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Create / Edit Dialog */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={700}>{editTarget ? "Marka Düzenle" : "Yeni Marka"}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {errorMsg && <Alert severity="error" sx={{ borderRadius: 2 }}>{errorMsg}</Alert>}
+            <TextField
+              label="Marka Adı"
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              fullWidth
+              autoFocus
+              size="small"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDialogOpen(false)} sx={{ textTransform: "none" }}>İptal</Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={!formName.trim() || isSaving}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            {isSaving ? <CircularProgress size={18} /> : "Kaydet"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirm Dialog */}
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={700}>Marka Sil</DialogTitle>
+        <DialogContent>
+          {errorMsg && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{errorMsg}</Alert>}
+          <Typography>
+            <strong>{deleteTarget?.name}</strong> markasını silmek istediğinize emin misiniz?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Bu markaya bağlı ürün varsa silinemez.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteTarget(null)} sx={{ textTransform: "none" }}>İptal</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+            disabled={deleteMutation.isPending}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            {deleteMutation.isPending ? <CircularProgress size={18} /> : "Sil"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
+
+// ─── Kategoriler Tab ─────────────────────────────────────────────────────────────
+
+function CategoriesTab() {
+  const qc = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<LookupDto | null>(null);
+  const [formName, setFormName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<LookupDto | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const { data: references, isLoading } = useQuery<ReferenceDataDto>({
+    queryKey: ["reference-data"],
+    queryFn: async () => (await apiClient.get<ReferenceDataDto>("/reference-data")).data
+  });
+
+  const categories = references?.categories ?? [];
+
+  const openCreate = () => {
+    setEditTarget(null);
+    setFormName("");
+    setErrorMsg("");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (c: LookupDto) => {
+    setEditTarget(c);
+    setFormName(c.name);
+    setErrorMsg("");
+    setDialogOpen(true);
+  };
+
+  const createMutation = useMutation({
+    mutationFn: (req: CreateLookupRequest) =>
+      apiClient.post<LookupDto>("/reference-data/categories", req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reference-data"] });
+      setDialogOpen(false);
+    },
+    onError: (err: any) => setErrorMsg(err.response?.data?.error ?? "Bir hata oluştu.")
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, req }: { id: string; req: UpdateLookupRequest }) =>
+      apiClient.put(`/reference-data/categories/${id}`, req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reference-data"] });
+      setDialogOpen(false);
+    },
+    onError: (err: any) => setErrorMsg(err.response?.data?.error ?? "Bir hata oluştu.")
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/reference-data/categories/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reference-data"] });
+      setDeleteTarget(null);
+    },
+    onError: (err: any) => setErrorMsg(err.response?.data?.error ?? "Silinemedi.")
+  });
+
+  const handleSave = () => {
+    if (!formName.trim()) return;
+    if (editTarget) {
+      updateMutation.mutate({ id: editTarget.id, req: { name: formName } });
+    } else {
+      createMutation.mutate({ name: formName });
+    }
+  };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  return (
+    <Box>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+        <Button
+          variant="contained"
+          startIcon={<AddOutlinedIcon />}
+          onClick={openCreate}
+          size="small"
+          sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+        >
+          Yeni Kategori
+        </Button>
+      </Box>
+
+      {isLoading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress size={32} />
+        </Box>
+      ) : (
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ "& th": { fontWeight: 700, fontSize: "0.78rem", color: "text.secondary" } }}>
+                <TableCell>Kategori Adı</TableCell>
+                <TableCell align="right">İşlemler</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {categories.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={2} align="center" sx={{ py: 4, color: "text.disabled" }}>
+                    Henüz kategori tanımlanmamış.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                categories.map((c) => (
+                  <TableRow key={c.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={600}>{c.name}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Düzenle">
+                        <IconButton size="small" onClick={() => openEdit(c)}>
+                          <EditOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Sil">
+                        <IconButton size="small" color="error" onClick={() => { setDeleteTarget(c); setErrorMsg(""); }}>
+                          <DeleteOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Create / Edit Dialog */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={700}>{editTarget ? "Kategori Düzenle" : "Yeni Kategori"}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {errorMsg && <Alert severity="error" sx={{ borderRadius: 2 }}>{errorMsg}</Alert>}
+            <TextField
+              label="Kategori Adı"
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              fullWidth
+              autoFocus
+              size="small"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDialogOpen(false)} sx={{ textTransform: "none" }}>İptal</Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={!formName.trim() || isSaving}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            {isSaving ? <CircularProgress size={18} /> : "Kaydet"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirm Dialog */}
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={700}>Kategori Sil</DialogTitle>
+        <DialogContent>
+          {errorMsg && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{errorMsg}</Alert>}
+          <Typography>
+            <strong>{deleteTarget?.name}</strong> kategorisini silmek istediğinize emin misiniz?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Bu kategoriye bağlı ürün veya alt kategori varsa silinemez.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteTarget(null)} sx={{ textTransform: "none" }}>İptal</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+            disabled={deleteMutation.isPending}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            {deleteMutation.isPending ? <CircularProgress size={18} /> : "Sil"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
+
+// ─── Ölçü Birimleri Tab ─────────────────────────────────────────────────────────
+
+function UnitsTab() {
+  const qc = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<LookupDto | null>(null);
+  const [formName, setFormName] = useState("");
+  const [formCode, setFormCode] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<LookupDto | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const { data: references, isLoading } = useQuery<ReferenceDataDto>({
+    queryKey: ["reference-data"],
+    queryFn: async () => (await apiClient.get<ReferenceDataDto>("/reference-data")).data
+  });
+
+  const units = references?.units ?? [];
+
+  const openCreate = () => {
+    setEditTarget(null);
+    setFormName("");
+    setFormCode("");
+    setErrorMsg("");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (u: LookupDto) => {
+    setEditTarget(u);
+    setFormName(u.name);
+    setFormCode(u.code);
+    setErrorMsg("");
+    setDialogOpen(true);
+  };
+
+  const createMutation = useMutation({
+    mutationFn: (req: CreateLookupRequest) =>
+      apiClient.post<LookupDto>("/reference-data/units", req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reference-data"] });
+      setDialogOpen(false);
+    },
+    onError: (err: any) => setErrorMsg(err.response?.data?.error ?? "Bir hata oluştu.")
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, req }: { id: string; req: UpdateLookupRequest }) =>
+      apiClient.put(`/reference-data/units/${id}`, req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reference-data"] });
+      setDialogOpen(false);
+    },
+    onError: (err: any) => setErrorMsg(err.response?.data?.error ?? "Bir hata oluştu.")
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/reference-data/units/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reference-data"] });
+      setDeleteTarget(null);
+    },
+    onError: (err: any) => setErrorMsg(err.response?.data?.error ?? "Silinemedi.")
+  });
+
+  const handleSave = () => {
+    if (!formName.trim() || !formCode.trim()) return;
+    if (editTarget) {
+      updateMutation.mutate({ id: editTarget.id, req: { name: formName, code: formCode } });
+    } else {
+      createMutation.mutate({ name: formName, code: formCode });
+    }
+  };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  return (
+    <Box>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+        <Button
+          variant="contained"
+          startIcon={<AddOutlinedIcon />}
+          onClick={openCreate}
+          size="small"
+          sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+        >
+          Yeni Ölçü Birimi
+        </Button>
+      </Box>
+
+      {isLoading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress size={32} />
+        </Box>
+      ) : (
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ "& th": { fontWeight: 700, fontSize: "0.78rem", color: "text.secondary" } }}>
+                <TableCell>Birim Kodu</TableCell>
+                <TableCell>Birim Adı</TableCell>
+                <TableCell align="right">İşlemler</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {units.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} align="center" sx={{ py: 4, color: "text.disabled" }}>
+                    Henüz ölçü birimi tanımlanmamış.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                units.map((u) => (
+                  <TableRow key={u.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={700} sx={{ fontFamily: "monospace" }}>{u.code}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={600}>{u.name}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Düzenle">
+                        <IconButton size="small" onClick={() => openEdit(u)}>
+                          <EditOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Sil">
+                        <IconButton size="small" color="error" onClick={() => { setDeleteTarget(u); setErrorMsg(""); }}>
+                          <DeleteOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Create / Edit Dialog */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={700}>{editTarget ? "Ölçü Birimini Düzenle" : "Yeni Ölçü Birimi"}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {errorMsg && <Alert severity="error" sx={{ borderRadius: 2 }}>{errorMsg}</Alert>}
+            <TextField
+              label="Birim Kodu"
+              value={formCode}
+              onChange={(e) => setFormCode(e.target.value)}
+              fullWidth
+              autoFocus
+              size="small"
+              placeholder="Örn: ADET, KG, L"
+            />
+            <TextField
+              label="Birim Adı"
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              fullWidth
+              size="small"
+              placeholder="Örn: Adet, Kilogram, Litre"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDialogOpen(false)} sx={{ textTransform: "none" }}>İptal</Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={!formName.trim() || !formCode.trim() || isSaving}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            {isSaving ? <CircularProgress size={18} /> : "Kaydet"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirm Dialog */}
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={700}>Ölçü Birimi Sil</DialogTitle>
+        <DialogContent>
+          {errorMsg && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{errorMsg}</Alert>}
+          <Typography>
+            <strong>{deleteTarget?.name}</strong> ölçü birimini silmek istediğinize emin misiniz?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Bu ölçü birimine atanmış aktif ürün varsa silinemez.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteTarget(null)} sx={{ textTransform: "none" }}>İptal</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+            disabled={deleteMutation.isPending}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            {deleteMutation.isPending ? <CircularProgress size={18} /> : "Sil"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
+
+// ─── Profil Tab Content ──────────────────────────────────────────────────────────
+
+function ProfileTabContent() {
   const { user } = useAuth();
   const theme = useTheme();
+
+  return (
+    <Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2.5 }}>
+        <Avatar
+          sx={{
+            width: 64,
+            height: 64,
+            bgcolor: "primary.main",
+            fontSize: "1.6rem",
+            fontWeight: 700,
+            boxShadow: `0 4px 14px ${theme.palette.primary.main}55`
+          }}
+        >
+          {user?.username?.charAt(0).toUpperCase() ?? "?"}
+        </Avatar>
+        <Box>
+          <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+            {user?.username ?? "—"}
+          </Typography>
+          <Box sx={{ mt: 0.5 }}>
+            <RoleChip role={user?.role ?? "Staff"} />
+          </Box>
+        </Box>
+      </Box>
+
+      <List disablePadding sx={{ mt: 2.5 }}>
+        <ListItem disablePadding sx={{ py: 1 }}>
+          <ListItemIcon sx={{ minWidth: 38 }}>
+            <BadgeOutlinedIcon fontSize="small" color="action" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Kullanıcı Adı"
+            secondary={user?.username ?? "—"}
+            primaryTypographyProps={{ variant: "body2", color: "text.secondary", fontWeight: 500 }}
+            secondaryTypographyProps={{ variant: "body1", color: "text.primary", fontWeight: 600 }}
+          />
+        </ListItem>
+      </List>
+    </Box>
+  );
+}
+
+// ─── Görünüm Tab Content ────────────────────────────────────────────────────────
+
+function AppearanceTabContent() {
+  const { mode, toggleColorMode } = useThemeMode();
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        py: 1
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        {mode === "dark"
+          ? <DarkModeOutlinedIcon color="primary" />
+          : <LightModeOutlinedIcon sx={{ color: "#F59E0B" }} />
+        }
+        <Box>
+          <Typography variant="body1" fontWeight={600}>
+            {mode === "dark" ? "Koyu Tema" : "Açık Tema"}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {mode === "dark"
+              ? "Karanlık mod etkin — gözlerinizi yormuyor."
+              : "Aydınlık mod etkin — parlak ortamlar için ideal."}
+          </Typography>
+        </Box>
+      </Box>
+      <Switch
+        checked={mode === "dark"}
+        onChange={toggleColorMode}
+        color="primary"
+        sx={{ "& .MuiSwitch-thumb": { boxShadow: "0 2px 6px rgba(0,0,0,0.3)" } }}
+      />
+    </Box>
+  );
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
+
+export function SettingsPage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
 
-  const isAdmin = user?.role === "Admin";
+  const tabsConfig = useMemo(() => {
+    const list = [
+      { 
+        label: "Profil", 
+        icon: <PersonOutlinedIcon fontSize="small" />, 
+        component: <SettingsSection title="Profil Bilgileri" icon={<PersonOutlinedIcon fontSize="small" />}><ProfileTabContent /></SettingsSection> 
+      },
+      { 
+        label: "Görünüm", 
+        icon: <PaletteOutlinedIcon fontSize="small" />, 
+        component: <SettingsSection title="Görünüm" icon={<PaletteOutlinedIcon fontSize="small" />}><AppearanceTabContent /></SettingsSection> 
+      }
+    ];
+
+    if (user?.role === "Admin") {
+      list.push(
+        { 
+          label: "Depolar", 
+          icon: <BusinessOutlinedIcon fontSize="small" />, 
+          component: <SettingsSection title="Depolar" icon={<BusinessOutlinedIcon fontSize="small" />}><WarehousesTab /></SettingsSection> 
+        },
+        { 
+          label: "Kasalar", 
+          icon: <PointOfSaleOutlinedIcon fontSize="small" />, 
+          component: <SettingsSection title="Kasalar" icon={<PointOfSaleOutlinedIcon fontSize="small" />}><TerminalsTab /></SettingsSection> 
+        }
+      );
+    }
+
+    if (user?.role === "Admin" || user?.role === "Manager") {
+      list.push(
+        { 
+          label: "Kategoriler", 
+          icon: <CategoryOutlinedIcon fontSize="small" />, 
+          component: <SettingsSection title="Kategoriler" icon={<CategoryOutlinedIcon fontSize="small" />}><CategoriesTab /></SettingsSection> 
+        },
+        { 
+          label: "Markalar", 
+          icon: <StarOutlineIcon fontSize="small" />, 
+          component: <SettingsSection title="Markalar" icon={<StarOutlineIcon fontSize="small" />}><BrandsTab /></SettingsSection> 
+        },
+        { 
+          label: "Ölçü Birimleri", 
+          icon: <Inventory2OutlinedIcon fontSize="small" />, 
+          component: <SettingsSection title="Ölçü Birimleri" icon={<Inventory2OutlinedIcon fontSize="small" />}><UnitsTab /></SettingsSection> 
+        }
+      );
+    }
+
+    return list;
+  }, [user]);
 
   return (
     <Stack spacing={3} sx={{ maxWidth: 800 }}>
@@ -636,109 +1364,14 @@ export function SettingsPage() {
             }
           }}
         >
-          <Tab icon={<PersonOutlinedIcon fontSize="small" />} iconPosition="start" label="Profil" />
-          <Tab icon={<PaletteOutlinedIcon fontSize="small" />} iconPosition="start" label="Görünüm" />
-          {isAdmin && (
-            <Tab icon={<BusinessOutlinedIcon fontSize="small" />} iconPosition="start" label="Depolar" />
-          )}
-          {isAdmin && (
-            <Tab icon={<PointOfSaleOutlinedIcon fontSize="small" />} iconPosition="start" label="Kasalar" />
-          )}
+          {tabsConfig.map((tab: any, index: number) => (
+            <Tab key={index} icon={tab.icon} iconPosition="start" label={tab.label} />
+          ))}
         </Tabs>
       </Box>
 
-      {/* Tab: Profil */}
-      {activeTab === 0 && (
-        <SettingsSection title="Profil Bilgileri" icon={<PersonOutlinedIcon fontSize="small" />}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2.5 }}>
-            <Avatar
-              sx={{
-                width: 64,
-                height: 64,
-                bgcolor: "primary.main",
-                fontSize: "1.6rem",
-                fontWeight: 700,
-                boxShadow: `0 4px 14px ${theme.palette.primary.main}55`
-              }}
-            >
-              {user?.username?.charAt(0).toUpperCase() ?? "?"}
-            </Avatar>
-            <Box>
-              <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>
-                {user?.username ?? "—"}
-              </Typography>
-              <Box sx={{ mt: 0.5 }}>
-                <RoleChip role={user?.role ?? "Staff"} />
-              </Box>
-            </Box>
-          </Box>
-
-          <List disablePadding sx={{ mt: 2.5 }}>
-            <ListItem disablePadding sx={{ py: 1 }}>
-              <ListItemIcon sx={{ minWidth: 38 }}>
-                <BadgeOutlinedIcon fontSize="small" color="action" />
-              </ListItemIcon>
-              <ListItemText
-                primary="Kullanıcı Adı"
-                secondary={user?.username ?? "—"}
-                primaryTypographyProps={{ variant: "body2", color: "text.secondary", fontWeight: 500 }}
-                secondaryTypographyProps={{ variant: "body1", color: "text.primary", fontWeight: 600 }}
-              />
-            </ListItem>
-          </List>
-        </SettingsSection>
-      )}
-
-      {/* Tab: Görünüm */}
-      {activeTab === 1 && (
-        <SettingsSection title="Görünüm" icon={<PaletteOutlinedIcon fontSize="small" />}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              py: 1
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              {mode === "dark"
-                ? <DarkModeOutlinedIcon color="primary" />
-                : <LightModeOutlinedIcon sx={{ color: "#F59E0B" }} />
-              }
-              <Box>
-                <Typography variant="body1" fontWeight={600}>
-                  {mode === "dark" ? "Koyu Tema" : "Açık Tema"}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {mode === "dark"
-                    ? "Karanlık mod etkin — gözlerinizi yormuyor."
-                    : "Aydınlık mod etkin — parlak ortamlar için ideal."}
-                </Typography>
-              </Box>
-            </Box>
-            <Switch
-              checked={mode === "dark"}
-              onChange={toggleColorMode}
-              color="primary"
-              sx={{ "& .MuiSwitch-thumb": { boxShadow: "0 2px 6px rgba(0,0,0,0.3)" } }}
-            />
-          </Box>
-        </SettingsSection>
-      )}
-
-      {/* Tab: Depolar (Admin only) */}
-      {isAdmin && activeTab === 2 && (
-        <SettingsSection title="Depolar" icon={<BusinessOutlinedIcon fontSize="small" />}>
-          <WarehousesTab />
-        </SettingsSection>
-      )}
-
-      {/* Tab: Kasalar (Admin only) */}
-      {isAdmin && activeTab === 3 && (
-        <SettingsSection title="Kasalar" icon={<PointOfSaleOutlinedIcon fontSize="small" />}>
-          <TerminalsTab />
-        </SettingsSection>
-      )}
+      {/* Render Active Tab Component */}
+      {tabsConfig[activeTab]?.component}
     </Stack>
   );
 }

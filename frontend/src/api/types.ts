@@ -37,6 +37,18 @@ export type ReferenceDataDto = {
   warehouses: LookupDto[];
 };
 
+export type CreateLookupRequest = {
+  name: string;
+  code?: string;
+  parentId?: string | null;
+};
+
+export type UpdateLookupRequest = {
+  name: string;
+  code?: string;
+  parentId?: string | null;
+};
+
 export type ProductDto = {
   id: string;
   code: string;

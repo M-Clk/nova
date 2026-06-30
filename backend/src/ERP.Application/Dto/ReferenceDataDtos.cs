@@ -9,6 +9,7 @@ public record ReferenceDataDto(
     IReadOnlyList<LookupDto> Warehouses);
 
 public record CreateLookupRequest(string Name, string? Code = null, Guid? ParentId = null);
+public record UpdateLookupRequest(string Name, string? Code = null, Guid? ParentId = null);
 
 // ─── Warehouse CRUD ───────────────────────────────────────────────────────────
 
