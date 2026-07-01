@@ -183,3 +183,8 @@ export type PosCheckoutResult = {
   netAmount: number;
 };
 
+export interface PaginatedListDto<T> {
+  items: T[];
+  totalCount: number;
+}
+

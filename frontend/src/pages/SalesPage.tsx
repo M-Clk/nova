@@ -12,14 +12,15 @@ import {
   Collapse,
   IconButton,
   Chip,
-  InputAdornment
+  InputAdornment,
+  TablePagination
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import { apiClient } from "../api/apiClient";
-import { ProductDto, ReferenceDataDto, SaleDto, CustomerDto } from "../api/types";
+import { ProductDto, ReferenceDataDto, SaleDto, CustomerDto, PaginatedListDto } from "../api/types";
 import { DataTable } from "../components/DataTable";
 
 const fmt = (amount: number) =>
@@ -42,6 +43,15 @@ export function SalesPage() {
   const [minAmount, setMinAmount] = useState<number | "">("");
   const [maxAmount, setMaxAmount] = useState<number | "">("");
 
+  // Pagination states
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [search, dateFilter, minAmount, maxAmount]);
+
   const products = useQuery({
     queryKey: ["products"],
     queryFn: async () => (await apiClient.get<ProductDto[]>("/products")).data
@@ -55,8 +65,20 @@ export function SalesPage() {
     queryFn: async () => (await apiClient.get<CustomerDto[]>("/customers")).data
   });
   const sales = useQuery({
-    queryKey: ["sales"],
-    queryFn: async () => (await apiClient.get<SaleDto[]>("/sales")).data
+    queryKey: ["sales", page, rowsPerPage, search, dateFilter, minAmount, maxAmount],
+    queryFn: async () => {
+      const response = await apiClient.get<PaginatedListDto<SaleDto>>("/sales", {
+        params: {
+          page: page + 1, // backend is 1-indexed
+          pageSize: rowsPerPage,
+          search: search || undefined,
+          dateFilter: dateFilter !== "all" ? dateFilter : undefined,
+          minAmount: minAmount !== "" ? minAmount : undefined,
+          maxAmount: maxAmount !== "" ? maxAmount : undefined
+        }
+      });
+      return response.data;
+    }
   });
 
   // Set default warehouse
@@ -115,43 +137,6 @@ export function SalesPage() {
   const currentPrice = unitPrice !== "" ? Number(unitPrice) : (selectedProd?.salePrice ?? 0);
   const subtotal = currentPrice * quantity;
   const netTotal = Math.max(0, subtotal - discountAmount);
-
-  // Client-side search and filters logic
-  const filteredSales = useMemo(() => {
-    const list = sales.data ?? [];
-    const term = search.trim().toLowerCase();
-    const now = new Date();
-
-    return list.filter((s) => {
-      // 1. Search term filter (order no or customer name)
-      const matchesSearch = 
-        !term ||
-        s.saleNo.toLowerCase().includes(term) ||
-        (s.customerName ?? "misafir müşteri").toLowerCase().includes(term);
-
-      // 2. Date range filter
-      let matchesDate = true;
-      if (dateFilter !== "all") {
-        const saleDate = new Date(s.createdAt);
-        const diffTime = Math.abs(now.getTime() - saleDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        if (dateFilter === "today") {
-          matchesDate = saleDate.toDateString() === now.toDateString();
-        } else if (dateFilter === "week") {
-          matchesDate = diffDays <= 7;
-        } else if (dateFilter === "month") {
-          matchesDate = diffDays <= 30;
-        }
-      }
-
-      // 3. Amount range filter
-      const matchesMin = minAmount === "" || s.netAmount >= minAmount;
-      const matchesMax = maxAmount === "" || s.netAmount <= maxAmount;
-
-      return matchesSearch && matchesDate && matchesMin && matchesMax;
-    });
-  }, [sales.data, search, dateFilter, minAmount, maxAmount]);
 
   const handleClearFilters = () => {
     setSearch("");
@@ -389,7 +374,7 @@ export function SalesPage() {
       {/* Data Table */}
       <DataTable
         columns={["Sipariş No", "Müşteri", "Toplam Tutar", "İndirim", "Net Tutar", "Tarih"]}
-        rows={filteredSales.map((s) => [
+        rows={(sales.data?.items ?? []).map((s) => [
           <Typography variant="body2" fontWeight={700} color="primary.main">{s.saleNo}</Typography>,
           s.customerName ?? <span style={{ opacity: 0.6 }}>Misafir Müşteri</span>,
           fmt(s.totalAmount),
@@ -397,6 +382,21 @@ export function SalesPage() {
           <Typography variant="body2" fontWeight={700} color="success.main">{fmt(s.netAmount)}</Typography>,
           new Date(s.createdAt).toLocaleString("tr-TR")
         ])}
+      />
+
+      <TablePagination
+        rowsPerPageOptions={[10, 25, 50, 100]}
+        component="div"
+        count={sales.data?.totalCount ?? 0}
+        rowsPerPage={rowsPerPage}
+        page={page}
+        onPageChange={(_, newPage) => setPage(newPage)}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        labelRowsPerPage="Sayfa başına satır:"
+        labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
       />
     </Stack>
   );

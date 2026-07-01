@@ -11,8 +11,23 @@ namespace ERP.Api.Controllers;
 public class ProductsController(IProductService products, IPosService pos) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<ProductDto>>> Get(CancellationToken cancellationToken)
-        => Ok(await products.GetAsync(cancellationToken));
+    public async Task<IActionResult> Get(
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        [FromQuery] string? search,
+        [FromQuery] Guid? brandId,
+        [FromQuery] Guid? categoryId,
+        [FromQuery] bool? isActive,
+        CancellationToken cancellationToken)
+    {
+        if (page.HasValue && pageSize.HasValue)
+        {
+            var result = await products.GetPagedAsync(page.Value, pageSize.Value, search, brandId, categoryId, isActive, cancellationToken);
+            return Ok(result);
+        }
+        
+        return Ok(await products.GetAsync(cancellationToken));
+    }
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ProductDto>> GetById(Guid id, CancellationToken cancellationToken)

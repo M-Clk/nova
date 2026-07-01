@@ -19,7 +19,8 @@ import {
   Snackbar,
   Alert,
   InputAdornment,
-  Tooltip
+  Tooltip,
+  TablePagination
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
@@ -29,7 +30,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import { DataTable } from "../components/DataTable";
 import { apiClient } from "../api/apiClient";
-import { ProductDto, ReferenceDataDto } from "../api/types";
+import { ProductDto, ReferenceDataDto, PaginatedListDto } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 
 export function ProductsPage() {
@@ -45,6 +46,15 @@ export function ProductsPage() {
   const [filterBrand, setFilterBrand] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+
+  // Pagination states
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [search, filterBrand, filterCategory, filterStatus]);
 
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<ProductDto | null>(null);
@@ -79,8 +89,20 @@ export function ProductsPage() {
   });
   
   const products = useQuery({
-    queryKey: ["products"],
-    queryFn: async () => (await apiClient.get<ProductDto[]>("/products")).data
+    queryKey: ["products", page, rowsPerPage, search, filterBrand, filterCategory, filterStatus],
+    queryFn: async () => {
+      const response = await apiClient.get<PaginatedListDto<ProductDto>>("/products", {
+        params: {
+          page: page + 1, // backend is 1-indexed
+          pageSize: rowsPerPage,
+          search: search || undefined,
+          brandId: filterBrand || undefined,
+          categoryId: filterCategory || undefined,
+          isActive: filterStatus === "all" ? undefined : filterStatus === "active"
+        }
+      });
+      return response.data;
+    }
   });
 
   const [form, setForm] = useState({ 
@@ -207,35 +229,6 @@ export function ProductsPage() {
   }
 
   const isPending = create.isPending || update.isPending;
-
-  // Client-side search and filters logic
-  const filteredProducts = useMemo(() => {
-    const list = products.data ?? [];
-    const term = search.trim().toLowerCase();
-
-    return list.filter((p) => {
-      // Search term filter
-      const matchesSearch = 
-        !term ||
-        p.code.toLowerCase().includes(term) ||
-        p.name.toLowerCase().includes(term) ||
-        (p.barcode ?? "").toLowerCase().includes(term);
-
-      // Brand filter
-      const matchesBrand = !filterBrand || p.brandId === filterBrand;
-
-      // Category filter
-      const matchesCategory = !filterCategory || p.categoryId === filterCategory;
-
-      // Status filter
-      const matchesStatus = 
-        filterStatus === "all" ||
-        (filterStatus === "active" && p.isActive) ||
-        (filterStatus === "passive" && !p.isActive);
-
-      return matchesSearch && matchesBrand && matchesCategory && matchesStatus;
-    });
-  }, [products.data, search, filterBrand, filterCategory, filterStatus]);
 
   const handleClearFilters = () => {
     setSearch("");
@@ -509,7 +502,7 @@ export function ProductsPage() {
       {/* Data Table */}
       <DataTable
         columns={canManage ? ["Kod", "Barkod", "Ürün Adı", "Marka", "Kategori", "Birim", "Satış Fiyatı", "Durum", "İşlemler"] : ["Kod", "Barkod", "Ürün Adı", "Marka", "Kategori", "Birim", "Satış Fiyatı", "Durum"]}
-        rows={filteredProducts.map((p) => {
+        rows={(products.data?.items ?? []).map((p) => {
           const row = [
             <Typography variant="body2" fontWeight={700} color="primary.main">{p.code}</Typography>,
             p.barcode || <span style={{ opacity: 0.5 }}>-</span>,
@@ -544,6 +537,21 @@ export function ProductsPage() {
           }
           return row;
         })}
+      />
+
+      <TablePagination
+        rowsPerPageOptions={[10, 25, 50, 100]}
+        component="div"
+        count={products.data?.totalCount ?? 0}
+        rowsPerPage={rowsPerPage}
+        page={page}
+        onPageChange={(_, newPage) => setPage(newPage)}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        labelRowsPerPage="Sayfa başına satır:"
+        labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
       />
 
       {/* Delete Confirmation Dialog */}

@@ -4,7 +4,8 @@ import {
   Stack, Typography, Grid, Box, Chip, Paper,
   Button, TextField, MenuItem, Collapse, Alert, Snackbar,
   Autocomplete, InputAdornment, IconButton,
-  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
+  TablePagination
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
@@ -15,7 +16,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { apiClient } from "../api/apiClient";
 import {
   CurrentStockDto, StockMovementDto, ProductDto,
-  ReferenceDataDto, AddStockMovementRequest
+  ReferenceDataDto, AddStockMovementRequest, PaginatedListDto
 } from "../api/types";
 import { DataTable } from "../components/DataTable";
 import { useAuth } from "../auth/AuthContext";
@@ -62,6 +63,15 @@ export function StockMovementsPage() {
   const [movementType, setMovementType] = useState("all");
   const [movementStatus, setMovementStatus] = useState("all");
 
+  // Pagination states for Stock Movements
+  const [movementPage, setMovementPage] = useState(0);
+  const [movementRowsPerPage, setMovementRowsPerPage] = useState(25);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setMovementPage(0);
+  }, [movementSearch, movementWarehouse, movementType, movementStatus]);
+
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -93,8 +103,20 @@ export function StockMovementsPage() {
     queryFn: async () => (await apiClient.get<CurrentStockDto[]>("/stock/current")).data
   });
   const movements = useQuery({
-    queryKey: ["stock-movements"],
-    queryFn: async () => (await apiClient.get<StockMovementDto[]>("/stock/movements")).data
+    queryKey: ["stock-movements", movementPage, movementRowsPerPage, movementSearch, movementWarehouse, movementType, movementStatus],
+    queryFn: async () => {
+      const response = await apiClient.get<PaginatedListDto<StockMovementDto>>("/stock/movements", {
+        params: {
+          page: movementPage + 1, // backend is 1-indexed
+          pageSize: movementRowsPerPage,
+          search: movementSearch || undefined,
+          warehouseName: movementWarehouse || undefined,
+          type: movementType !== "all" ? movementType : undefined,
+          status: movementStatus !== "all" ? movementStatus : undefined
+        }
+      });
+      return response.data;
+    }
   });
   const products = useQuery({
     queryKey: ["products"],
@@ -251,7 +273,7 @@ export function StockMovementsPage() {
 
   const selectedProduct = products.data?.find(p => p.id === form.productId);
 
-  // Filter logıcs
+  // Client-side current stock status filters
   const filteredCurrent = useMemo(() => {
     const list = current.data ?? [];
     const term = currentSearch.trim().toLowerCase();
@@ -267,29 +289,6 @@ export function StockMovementsPage() {
       return matchesSearch && matchesWarehouse;
     });
   }, [current.data, currentSearch, currentWarehouse]);
-
-  const filteredMovements = useMemo(() => {
-    const list = movements.data ?? [];
-    const term = movementSearch.trim().toLowerCase();
-
-    return list.filter((m) => {
-      const matchesSearch = 
-        !term || 
-        m.productCode.toLowerCase().includes(term) || 
-        m.productName.toLowerCase().includes(term);
-
-      const matchesWarehouse = !movementWarehouse || m.warehouseName === movementWarehouse;
-
-      const matchesType = movementType === "all" || m.type === Number(movementType);
-
-      const matchesStatus = 
-        movementStatus === "all" ||
-        (movementStatus === "cancelled" && m.isCancelled) ||
-        (movementStatus === "normal" && !m.isCancelled);
-
-      return matchesSearch && matchesWarehouse && matchesType && matchesStatus;
-    });
-  }, [movements.data, movementSearch, movementWarehouse, movementType, movementStatus]);
 
   const handleClearCurrentFilters = () => {
     setCurrentSearch("");
@@ -688,7 +687,7 @@ export function StockMovementsPage() {
 
         <DataTable
           columns={canManage ? ["Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih", "İşlemler"] : ["Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih"]}
-          rows={filteredMovements.map(m => {
+          rows={(movements.data?.items ?? []).map(m => {
             const isManual = m.referenceType === "MANUAL";
             const row = [
               renderCell(<Typography variant="body2" fontWeight={700} color="primary.main">{m.productCode}</Typography>, m.isCancelled, true),
@@ -727,6 +726,21 @@ export function StockMovementsPage() {
             }
             return row;
           })}
+        />
+
+        <TablePagination
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          component="div"
+          count={movements.data?.totalCount ?? 0}
+          rowsPerPage={movementRowsPerPage}
+          page={movementPage}
+          onPageChange={(_, newPage) => setMovementPage(newPage)}
+          onRowsPerPageChange={(e) => {
+            setMovementRowsPerPage(parseInt(e.target.value, 10));
+            setMovementPage(0);
+          }}
+          labelRowsPerPage="Sayfa başına satır:"
+          labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
         />
       </Box>
 

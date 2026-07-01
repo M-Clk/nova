@@ -8,6 +8,7 @@ namespace ERP.Application.Services;
 public interface IProductService
 {
     Task<IReadOnlyList<ProductDto>> GetAsync(CancellationToken cancellationToken = default);
+    Task<PaginatedListDto<ProductDto>> GetPagedAsync(int page, int pageSize, string? search, Guid? brandId, Guid? categoryId, bool? isActive, CancellationToken cancellationToken = default);
     Task<ProductDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ProductDto> CreateAsync(CreateProductRequest request, CancellationToken cancellationToken = default);
     Task<bool> UpdateAsync(Guid id, UpdateProductRequest request, CancellationToken cancellationToken = default);
@@ -20,6 +21,54 @@ public class ProductService(IErpDbContext db) : IProductService
     {
         return ProductQuery(db.Products.AsNoTracking().OrderBy(x => x.Name)).ToListAsync(cancellationToken)
             .ContinueWith<IReadOnlyList<ProductDto>>(x => x.Result, cancellationToken);
+    }
+
+    public async Task<PaginatedListDto<ProductDto>> GetPagedAsync(
+        int page,
+        int pageSize,
+        string? search,
+        Guid? brandId,
+        Guid? categoryId,
+        bool? isActive,
+        CancellationToken cancellationToken = default)
+    {
+        var query = db.Products.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var cleanSearch = search.Trim().ToLower();
+            query = query.Where(x => 
+                x.Code.ToLower().Contains(cleanSearch) || 
+                x.Name.ToLower().Contains(cleanSearch) || 
+                x.Barcode.ToLower().Contains(cleanSearch)
+            );
+        }
+
+        if (brandId.HasValue)
+        {
+            query = query.Where(x => x.BrandId == brandId.Value);
+        }
+
+        if (categoryId.HasValue)
+        {
+            query = query.Where(x => x.CategoryId == categoryId.Value);
+        }
+
+        if (isActive.HasValue)
+        {
+            query = query.Where(x => x.IsActive == isActive.Value);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        query = query.OrderBy(x => x.Name);
+
+        var items = await ProductQuery(query)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PaginatedListDto<ProductDto>(items, totalCount);
     }
 
     public Task<ProductDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

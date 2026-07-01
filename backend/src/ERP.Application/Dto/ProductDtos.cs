@@ -38,3 +38,6 @@ public record UpdateProductRequest(
     decimal SalePrice,
     decimal MinStock,
     bool IsActive);
+
+public record PaginatedListDto<T>(IReadOnlyList<T> Items, int TotalCount);
+

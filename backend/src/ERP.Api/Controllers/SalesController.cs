@@ -19,8 +19,23 @@ public class SalesController(ISaleService sales) : ControllerBase
 
     [HttpGet]
     [Authorize(Roles = "Admin,Manager")]
-    public async Task<ActionResult<IReadOnlyList<SaleDto>>> Get(CancellationToken cancellationToken)
-        => Ok(await sales.GetAsync(cancellationToken));
+    public async Task<IActionResult> Get(
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        [FromQuery] string? search,
+        [FromQuery] string? dateFilter,
+        [FromQuery] decimal? minAmount,
+        [FromQuery] decimal? maxAmount,
+        CancellationToken cancellationToken)
+    {
+        if (page.HasValue && pageSize.HasValue)
+        {
+            var result = await sales.GetPagedAsync(page.Value, pageSize.Value, search, dateFilter, minAmount, maxAmount, cancellationToken);
+            return Ok(result);
+        }
+        
+        return Ok(await sales.GetAsync(cancellationToken));
+    }
 
     [HttpGet("{id:guid}")]
     [Authorize(Roles = "Admin,Manager")]

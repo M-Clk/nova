@@ -8,6 +8,14 @@ namespace ERP.Application.Services;
 public interface ISaleService
 {
     Task<IReadOnlyList<SaleDto>> GetAsync(CancellationToken cancellationToken = default);
+    Task<PaginatedListDto<SaleDto>> GetPagedAsync(
+        int page,
+        int pageSize,
+        string? search,
+        string? dateFilter,
+        decimal? minAmount,
+        decimal? maxAmount,
+        CancellationToken cancellationToken = default);
     Task<SaleDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<SaleDto> CreateAsync(CreateSaleRequest request, CancellationToken cancellationToken = default);
 }
@@ -18,6 +26,68 @@ public class SaleService(IErpDbContext db) : ISaleService
     {
         return SaleQuery(db.Sales.AsNoTracking().OrderByDescending(x => x.CreatedAt)).ToListAsync(cancellationToken)
             .ContinueWith<IReadOnlyList<SaleDto>>(x => x.Result, cancellationToken);
+    }
+
+    public async Task<PaginatedListDto<SaleDto>> GetPagedAsync(
+        int page,
+        int pageSize,
+        string? search,
+        string? dateFilter,
+        decimal? minAmount,
+        decimal? maxAmount,
+        CancellationToken cancellationToken = default)
+    {
+        var query = db.Sales.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var cleanSearch = search.Trim().ToLower();
+            query = query.Where(x => 
+                x.SaleNo.ToLower().Contains(cleanSearch) || 
+                (x.Customer != null && x.Customer.Name.ToLower().Contains(cleanSearch))
+            );
+        }
+
+        if (!string.IsNullOrWhiteSpace(dateFilter) && dateFilter != "all")
+        {
+            var now = DateTime.UtcNow;
+            if (dateFilter == "today")
+            {
+                var todayUtc = DateTime.UtcNow.Date;
+                query = query.Where(x => x.CreatedAt >= todayUtc);
+            }
+            else if (dateFilter == "week")
+            {
+                var weekAgo = now.AddDays(-7);
+                query = query.Where(x => x.CreatedAt >= weekAgo);
+            }
+            else if (dateFilter == "month")
+            {
+                var monthAgo = now.AddDays(-30);
+                query = query.Where(x => x.CreatedAt >= monthAgo);
+            }
+        }
+
+        if (minAmount.HasValue)
+        {
+            query = query.Where(x => x.NetAmount >= minAmount.Value);
+        }
+
+        if (maxAmount.HasValue)
+        {
+            query = query.Where(x => x.NetAmount <= maxAmount.Value);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        query = query.OrderByDescending(x => x.CreatedAt);
+
+        var items = await SaleQuery(query)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PaginatedListDto<SaleDto>(items, totalCount);
     }
 
     public Task<SaleDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

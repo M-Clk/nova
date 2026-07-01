@@ -9,6 +9,14 @@ public interface IStockService
 {
     Task<IReadOnlyList<CurrentStockDto>> GetCurrentAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<StockMovementDto>> GetMovementsAsync(CancellationToken cancellationToken = default);
+    Task<PaginatedListDto<StockMovementDto>> GetPagedMovementsAsync(
+        int page,
+        int pageSize,
+        string? search,
+        string? warehouseName,
+        string? movementType,
+        string? movementStatus,
+        CancellationToken cancellationToken = default);
     Task<StockMovementDto> AddMovementAsync(AddStockMovementRequest request, CancellationToken cancellationToken = default);
     Task CancelMovementAsync(Guid id, CancellationToken cancellationToken = default);
 }
@@ -84,6 +92,80 @@ public class StockService(IErpDbContext db) : IStockService
                 x.CreatedAt))
             .ToListAsync(cancellationToken)
             .ContinueWith<IReadOnlyList<StockMovementDto>>(x => x.Result, cancellationToken);
+    }
+
+    public async Task<PaginatedListDto<StockMovementDto>> GetPagedMovementsAsync(
+        int page,
+        int pageSize,
+        string? search,
+        string? warehouseName,
+        string? movementType,
+        string? movementStatus,
+        CancellationToken cancellationToken = default)
+    {
+        var query = db.StockMovements.AsNoTracking();
+
+        // 1. Search filter
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var cleanSearch = search.Trim().ToLower();
+            query = query.Where(x => 
+                (x.Product != null && x.Product.Code.ToLower().Contains(cleanSearch)) || 
+                (x.Product != null && x.Product.Name.ToLower().Contains(cleanSearch))
+            );
+        }
+
+        // 2. Warehouse name filter
+        if (!string.IsNullOrWhiteSpace(warehouseName))
+        {
+            query = query.Where(x => x.Warehouse != null && x.Warehouse.Name == warehouseName);
+        }
+
+        // 3. Movement Type filter
+        if (!string.IsNullOrWhiteSpace(movementType) && movementType != "all")
+        {
+            if (int.TryParse(movementType, out var typeInt))
+            {
+                query = query.Where(x => (int)x.Type == typeInt);
+            }
+        }
+
+        // 4. Movement Status filter
+        if (!string.IsNullOrWhiteSpace(movementStatus) && movementStatus != "all")
+        {
+            if (movementStatus == "cancelled")
+            {
+                query = query.Where(x => x.IsCancelled);
+            }
+            else if (movementStatus == "normal")
+            {
+                query = query.Where(x => !x.IsCancelled);
+            }
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        query = query.OrderByDescending(x => x.CreatedAt);
+
+        var items = await query.Select(x => new StockMovementDto(
+                x.Id,
+                x.ProductId,
+                x.Product != null ? x.Product.Code : string.Empty,
+                x.Product != null ? x.Product.Name : string.Empty,
+                x.WarehouseId,
+                x.Warehouse != null ? x.Warehouse.Name : string.Empty,
+                x.Type,
+                x.Quantity,
+                x.UnitPrice,
+                x.ReferenceType,
+                x.ReferenceId,
+                x.IsCancelled,
+                x.CreatedAt))
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PaginatedListDto<StockMovementDto>(items, totalCount);
     }
 
     public async Task<StockMovementDto> AddMovementAsync(AddStockMovementRequest request, CancellationToken cancellationToken = default)
