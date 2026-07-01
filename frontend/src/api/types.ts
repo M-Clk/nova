@@ -87,6 +87,7 @@ export type StockMovementDto = {
   id: string;
   productCode: string;
   productName: string;
+  productBarcode: string;
   warehouseName: string;
   type: number;
   quantity: number;
@@ -99,6 +100,7 @@ export type StockMovementDto = {
 export type CurrentStockDto = {
   productCode: string;
   productName: string;
+  productBarcode: string;
   warehouseName: string;
   quantity: number;
 };

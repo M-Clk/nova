@@ -54,11 +54,17 @@ export function StockMovementsPage() {
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
 
   // Current Stock filter states
-  const [currentSearch, setCurrentSearch] = useState("");
+  const [currentBarcodeVal, setCurrentBarcodeVal] = useState("");
+  const [currentNameVal, setCurrentNameVal] = useState("");
+  const [currentBarcodeSearch, setCurrentBarcodeSearch] = useState("");
+  const [currentNameSearch, setCurrentNameSearch] = useState("");
   const [currentWarehouse, setCurrentWarehouse] = useState("");
 
   // Movement Ledger filter states
-  const [movementSearch, setMovementSearch] = useState("");
+  const [movementBarcodeVal, setMovementBarcodeVal] = useState("");
+  const [movementNameVal, setMovementNameVal] = useState("");
+  const [movementBarcodeSearch, setMovementBarcodeSearch] = useState("");
+  const [movementNameSearch, setMovementNameSearch] = useState("");
   const [movementWarehouse, setMovementWarehouse] = useState("");
   const [movementType, setMovementType] = useState("all");
   const [movementStatus, setMovementStatus] = useState("all");
@@ -70,7 +76,7 @@ export function StockMovementsPage() {
   // Reset page when filters change
   useEffect(() => {
     setMovementPage(0);
-  }, [movementSearch, movementWarehouse, movementType, movementStatus]);
+  }, [movementBarcodeSearch, movementNameSearch, movementWarehouse, movementType, movementStatus]);
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -103,13 +109,14 @@ export function StockMovementsPage() {
     queryFn: async () => (await apiClient.get<CurrentStockDto[]>("/stock/current")).data
   });
   const movements = useQuery({
-    queryKey: ["stock-movements", movementPage, movementRowsPerPage, movementSearch, movementWarehouse, movementType, movementStatus],
+    queryKey: ["stock-movements", movementPage, movementRowsPerPage, movementBarcodeSearch, movementNameSearch, movementWarehouse, movementType, movementStatus],
     queryFn: async () => {
       const response = await apiClient.get<PaginatedListDto<StockMovementDto>>("/stock/movements", {
         params: {
           page: movementPage + 1, // backend is 1-indexed
           pageSize: movementRowsPerPage,
-          search: movementSearch || undefined,
+          barcode: movementBarcodeSearch || undefined,
+          productName: movementNameSearch || undefined,
           warehouseName: movementWarehouse || undefined,
           type: movementType !== "all" ? movementType : undefined,
           status: movementStatus !== "all" ? movementStatus : undefined
@@ -126,6 +133,15 @@ export function StockMovementsPage() {
     queryKey: ["reference-data"],
     queryFn: async () => (await apiClient.get<ReferenceDataDto>("/reference-data")).data
   });
+
+  useEffect(() => {
+    if (references.data?.warehouses && references.data.warehouses.length > 0 && !form.warehouseId) {
+      setForm(f => ({
+        ...f,
+        warehouseId: references.data.warehouses[0].id
+      }));
+    }
+  }, [references.data, form.warehouseId]);
 
   const addMovement = useMutation({
     mutationFn: async () => apiClient.post<StockMovementDto>("/stock/movements", form),
@@ -276,27 +292,31 @@ export function StockMovementsPage() {
   // Client-side current stock status filters
   const filteredCurrent = useMemo(() => {
     const list = current.data ?? [];
-    const term = currentSearch.trim().toLowerCase();
+    const bcTerm = currentBarcodeSearch.trim().toLowerCase();
+    const nameTerm = currentNameSearch.trim().toLowerCase();
 
     return list.filter((s) => {
-      const matchesSearch = 
-        !term || 
-        s.productCode.toLowerCase().includes(term) || 
-        s.productName.toLowerCase().includes(term);
-
+      const matchesBarcode = !bcTerm || s.productBarcode?.toLowerCase().includes(bcTerm);
+      const matchesName = !nameTerm || s.productName.toLowerCase().includes(nameTerm);
       const matchesWarehouse = !currentWarehouse || s.warehouseName === currentWarehouse;
 
-      return matchesSearch && matchesWarehouse;
+      return matchesBarcode && matchesName && matchesWarehouse;
     });
-  }, [current.data, currentSearch, currentWarehouse]);
+  }, [current.data, currentBarcodeSearch, currentNameSearch, currentWarehouse]);
 
   const handleClearCurrentFilters = () => {
-    setCurrentSearch("");
+    setCurrentBarcodeVal("");
+    setCurrentNameVal("");
+    setCurrentBarcodeSearch("");
+    setCurrentNameSearch("");
     setCurrentWarehouse("");
   };
 
   const handleClearMovementFilters = () => {
-    setMovementSearch("");
+    setMovementBarcodeVal("");
+    setMovementNameVal("");
+    setMovementBarcodeSearch("");
+    setMovementNameSearch("");
     setMovementWarehouse("");
     setMovementType("all");
     setMovementStatus("all");
@@ -519,11 +539,53 @@ export function StockMovementsPage() {
         {/* Current Stock Filters */}
         <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={6} md={5}>
+            {/* Barcode Search */}
+            <Grid item xs={12} sm={6} md={4}>
               <TextField
-                placeholder="Ürün adı veya kodu ara…"
-                value={currentSearch}
-                onChange={e => setCurrentSearch(e.target.value)}
+                label="Barkod Ara"
+                placeholder="Barkod yazıp Enter'a basın…"
+                value={currentBarcodeVal}
+                onChange={e => setCurrentBarcodeVal(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    setCurrentBarcodeSearch(currentBarcodeVal);
+                  }
+                }}
+                size="small"
+                fullWidth
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <QrCodeScannerIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: currentBarcodeVal ? (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => {
+                        setCurrentBarcodeVal("");
+                        setCurrentBarcodeSearch("");
+                      }}>
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                }}
+              />
+            </Grid>
+            {/* Product Name Search */}
+            <Grid item xs={12} sm={6} md={4}>
+              <TextField
+                label="Ürün İsmi"
+                placeholder="Ürün ismi yazıp Enter'a basın…"
+                value={currentNameVal}
+                onChange={e => setCurrentNameVal(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    setCurrentNameSearch(currentNameVal);
+                  }
+                }}
                 size="small"
                 fullWidth
                 InputProps={{
@@ -532,9 +594,12 @@ export function StockMovementsPage() {
                       <SearchIcon fontSize="small" sx={{ color: "text.disabled" }} />
                     </InputAdornment>
                   ),
-                  endAdornment: currentSearch ? (
+                  endAdornment: currentNameVal ? (
                     <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setCurrentSearch("")}>
+                      <IconButton size="small" onClick={() => {
+                        setCurrentNameVal("");
+                        setCurrentNameSearch("");
+                      }}>
                         <ClearIcon fontSize="small" />
                       </IconButton>
                     </InputAdornment>
@@ -542,7 +607,8 @@ export function StockMovementsPage() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={4}>
+            {/* Warehouse Select */}
+            <Grid item xs={12} sm={6} md={2.5}>
               <TextField
                 select
                 label="Depo"
@@ -557,8 +623,9 @@ export function StockMovementsPage() {
                 ))}
               </TextField>
             </Grid>
-            <Grid item xs={12} sm={12} md={3} sx={{ display: "flex", justifyContent: "flex-end" }}>
-              {(currentSearch || currentWarehouse) && (
+            {/* Clear Button */}
+            <Grid item xs={12} sm={6} md={1.5} sx={{ display: "flex", justifyContent: "flex-end" }}>
+              {(currentBarcodeVal || currentNameVal || currentWarehouse) && (
                 <Button 
                   variant="text" 
                   size="small" 
@@ -566,7 +633,7 @@ export function StockMovementsPage() {
                   onClick={handleClearCurrentFilters}
                   sx={{ textTransform: "none" }}
                 >
-                  Filtreleri Temizle
+                  Temizle
                 </Button>
               )}
             </Grid>
@@ -574,8 +641,9 @@ export function StockMovementsPage() {
         </Paper>
 
         <DataTable
-          columns={["Ürün Kodu", "Ürün Adı", "Depo Adı", "Mevcut Miktar"]}
+          columns={["Barkod", "Ürün Kodu", "Ürün Adı", "Depo Adı", "Mevcut Miktar"]}
           rows={filteredCurrent.map(s => [
+            s.productBarcode || <span style={{ opacity: 0.5 }}>—</span>,
             <Typography variant="body2" fontWeight={700} color="primary.main">{s.productCode}</Typography>,
             s.productName,
             s.warehouseName,
@@ -602,11 +670,53 @@ export function StockMovementsPage() {
         {/* Ledger Filters */}
         <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={6} md={3.5}>
+            {/* Barcode Search */}
+            <Grid item xs={12} sm={6} md={2.5}>
               <TextField
-                placeholder="Ürün adı veya kodu ara…"
-                value={movementSearch}
-                onChange={e => setMovementSearch(e.target.value)}
+                label="Barkod Ara"
+                placeholder="Barkod yazıp Enter'a basın…"
+                value={movementBarcodeVal}
+                onChange={e => setMovementBarcodeVal(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    setMovementBarcodeSearch(movementBarcodeVal);
+                  }
+                }}
+                size="small"
+                fullWidth
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <QrCodeScannerIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: movementBarcodeVal ? (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => {
+                        setMovementBarcodeVal("");
+                        setMovementBarcodeSearch("");
+                      }}>
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                }}
+              />
+            </Grid>
+            {/* Product Name Search */}
+            <Grid item xs={12} sm={6} md={2.5}>
+              <TextField
+                label="Ürün İsmi"
+                placeholder="Ürün ismi yazıp Enter'a basın…"
+                value={movementNameVal}
+                onChange={e => setMovementNameVal(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    setMovementNameSearch(movementNameVal);
+                  }
+                }}
                 size="small"
                 fullWidth
                 InputProps={{
@@ -615,9 +725,12 @@ export function StockMovementsPage() {
                       <SearchIcon fontSize="small" sx={{ color: "text.disabled" }} />
                     </InputAdornment>
                   ),
-                  endAdornment: movementSearch ? (
+                  endAdornment: movementNameVal ? (
                     <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setMovementSearch("")}>
+                      <IconButton size="small" onClick={() => {
+                        setMovementNameVal("");
+                        setMovementNameSearch("");
+                      }}>
                         <ClearIcon fontSize="small" />
                       </IconButton>
                     </InputAdornment>
@@ -625,7 +738,7 @@ export function StockMovementsPage() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={2.5}>
+            <Grid item xs={12} sm={6} md={2}>
               <TextField
                 select
                 label="Depo"
@@ -640,7 +753,7 @@ export function StockMovementsPage() {
                 ))}
               </TextField>
             </Grid>
-            <Grid item xs={12} sm={6} md={2.5}>
+            <Grid item xs={12} sm={6} md={2}>
               <TextField
                 select
                 label="Hareket Tipi"
@@ -669,8 +782,8 @@ export function StockMovementsPage() {
                 <MenuItem value="cancelled">İptal Edilmiş</MenuItem>
               </TextField>
             </Grid>
-            <Grid item xs={12} sm={12} md={1.5} sx={{ display: "flex", justifyContent: "flex-end" }}>
-              {(movementSearch || movementWarehouse || movementType !== "all" || movementStatus !== "all") && (
+            <Grid item xs={12} sm={12} md={1} sx={{ display: "flex", justifyContent: "flex-end" }}>
+              {(movementBarcodeVal || movementNameVal || movementWarehouse || movementType !== "all" || movementStatus !== "all") && (
                 <Button 
                   variant="text" 
                   size="small" 
@@ -686,10 +799,11 @@ export function StockMovementsPage() {
         </Paper>
 
         <DataTable
-          columns={canManage ? ["Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih", "İşlemler"] : ["Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih"]}
+          columns={canManage ? ["Barkod", "Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih", "İşlemler"] : ["Barkod", "Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih"]}
           rows={(movements.data?.items ?? []).map(m => {
             const isManual = m.referenceType === "MANUAL";
             const row = [
+              renderCell(m.productBarcode || <span style={{ opacity: 0.5 }}>—</span>, m.isCancelled),
               renderCell(<Typography variant="body2" fontWeight={700} color="primary.main">{m.productCode}</Typography>, m.isCancelled, true),
               renderCell(m.productName, m.isCancelled),
               renderCell(m.warehouseName, m.isCancelled),

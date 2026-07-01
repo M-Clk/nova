@@ -6,6 +6,7 @@ public record CurrentStockDto(
     Guid ProductId,
     string ProductCode,
     string ProductName,
+    string ProductBarcode,
     Guid WarehouseId,
     string WarehouseName,
     decimal Quantity);
@@ -15,6 +16,7 @@ public record StockMovementDto(
     Guid ProductId,
     string ProductCode,
     string ProductName,
+    string ProductBarcode,
     Guid WarehouseId,
     string WarehouseName,
     StockMovementType Type,

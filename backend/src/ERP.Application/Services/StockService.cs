@@ -12,7 +12,8 @@ public interface IStockService
     Task<PaginatedListDto<StockMovementDto>> GetPagedMovementsAsync(
         int page,
         int pageSize,
-        string? search,
+        string? barcode,
+        string? productName,
         string? warehouseName,
         string? movementType,
         string? movementStatus,
@@ -48,7 +49,7 @@ public class StockService(IErpDbContext db) : IStockService
         var products = await db.Products
             .AsNoTracking()
             .Where(p => productIds.Contains(p.Id))
-            .Select(p => new { p.Id, p.Code, p.Name })
+            .Select(p => new { p.Id, p.Code, p.Name, p.Barcode })
             .ToListAsync(cancellationToken);
 
         var warehouses = await db.Warehouses
@@ -65,6 +66,7 @@ public class StockService(IErpDbContext db) : IStockService
                 g.ProductId,
                 productMap.TryGetValue(g.ProductId, out var p) ? p.Code : string.Empty,
                 productMap.TryGetValue(g.ProductId, out var p2) ? p2.Name : string.Empty,
+                productMap.TryGetValue(g.ProductId, out var p3) ? p3.Barcode : string.Empty,
                 g.WarehouseId,
                 warehouseMap.TryGetValue(g.WarehouseId, out var w) ? w.Name : string.Empty,
                 g.Quantity))
@@ -81,6 +83,7 @@ public class StockService(IErpDbContext db) : IStockService
                 x.ProductId,
                 x.Product != null ? x.Product.Code : string.Empty,
                 x.Product != null ? x.Product.Name : string.Empty,
+                x.Product != null ? x.Product.Barcode : string.Empty,
                 x.WarehouseId,
                 x.Warehouse != null ? x.Warehouse.Name : string.Empty,
                 x.Type,
@@ -97,7 +100,8 @@ public class StockService(IErpDbContext db) : IStockService
     public async Task<PaginatedListDto<StockMovementDto>> GetPagedMovementsAsync(
         int page,
         int pageSize,
-        string? search,
+        string? barcode,
+        string? productName,
         string? warehouseName,
         string? movementType,
         string? movementStatus,
@@ -105,23 +109,27 @@ public class StockService(IErpDbContext db) : IStockService
     {
         var query = db.StockMovements.AsNoTracking();
 
-        // 1. Search filter
-        if (!string.IsNullOrWhiteSpace(search))
+        // 1. Barcode filter
+        if (!string.IsNullOrWhiteSpace(barcode))
         {
-            var cleanSearch = search.Trim().ToLower();
-            query = query.Where(x => 
-                (x.Product != null && x.Product.Code.ToLower().Contains(cleanSearch)) || 
-                (x.Product != null && x.Product.Name.ToLower().Contains(cleanSearch))
-            );
+            var cleanBarcode = barcode.Trim().ToLower();
+            query = query.Where(x => x.Product != null && x.Product.Barcode.ToLower().Contains(cleanBarcode));
         }
 
-        // 2. Warehouse name filter
+        // 2. Product name filter
+        if (!string.IsNullOrWhiteSpace(productName))
+        {
+            var cleanName = productName.Trim().ToLower();
+            query = query.Where(x => x.Product != null && x.Product.Name.ToLower().Contains(cleanName));
+        }
+
+        // 3. Warehouse name filter
         if (!string.IsNullOrWhiteSpace(warehouseName))
         {
             query = query.Where(x => x.Warehouse != null && x.Warehouse.Name == warehouseName);
         }
 
-        // 3. Movement Type filter
+        // 4. Movement Type filter
         if (!string.IsNullOrWhiteSpace(movementType) && movementType != "all")
         {
             if (int.TryParse(movementType, out var typeInt))
@@ -130,7 +138,7 @@ public class StockService(IErpDbContext db) : IStockService
             }
         }
 
-        // 4. Movement Status filter
+        // 5. Movement Status filter
         if (!string.IsNullOrWhiteSpace(movementStatus) && movementStatus != "all")
         {
             if (movementStatus == "cancelled")
@@ -152,6 +160,7 @@ public class StockService(IErpDbContext db) : IStockService
                 x.ProductId,
                 x.Product != null ? x.Product.Code : string.Empty,
                 x.Product != null ? x.Product.Name : string.Empty,
+                x.Product != null ? x.Product.Barcode : string.Empty,
                 x.WarehouseId,
                 x.Warehouse != null ? x.Warehouse.Name : string.Empty,
                 x.Type,
@@ -204,6 +213,7 @@ public class StockService(IErpDbContext db) : IStockService
             product.Id,
             product.Code,
             product.Name,
+            product.Barcode,
             warehouse.Id,
             warehouse.Name,
             movement.Type,

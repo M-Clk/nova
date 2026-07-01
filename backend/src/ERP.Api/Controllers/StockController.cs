@@ -18,7 +18,8 @@ public class StockController(IStockService stock) : ControllerBase
     public async Task<IActionResult> GetMovements(
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
-        [FromQuery] string? search,
+        [FromQuery] string? barcode,
+        [FromQuery] string? productName,
         [FromQuery] string? warehouseName,
         [FromQuery] string? type,
         [FromQuery] string? status,
@@ -26,7 +27,7 @@ public class StockController(IStockService stock) : ControllerBase
     {
         if (page.HasValue && pageSize.HasValue)
         {
-            var result = await stock.GetPagedMovementsAsync(page.Value, pageSize.Value, search, warehouseName, type, status, cancellationToken);
+            var result = await stock.GetPagedMovementsAsync(page.Value, pageSize.Value, barcode, productName, warehouseName, type, status, cancellationToken);
             return Ok(result);
         }
         
