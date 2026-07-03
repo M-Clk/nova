@@ -60,7 +60,7 @@ public class AuthService(IErpDbContext db, IConfiguration configuration) : IAuth
             ?? throw new UnauthorizedAccessException("Geçersiz refresh token.");
 
         if (user.RefreshTokenExpiry < DateTime.UtcNow)
-            throw new UnauthorizedAccessException("Refresh token süresi dolmuş. Lütfen tekrar giriş yapın.");
+            throw new UnauthorizedAccessException("Refresh token süresi doldu. Lütfen tekrar giriş yapın.");
 
         return await GenerateAndSaveTokens(user, ct);
     }
