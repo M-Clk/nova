@@ -75,3 +75,15 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.4s ease forwards;
 }
+
+/* Override chrome/safari autofill background and text color to match themes */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: currentColor !important;
+  transition: background-color 999999s ease-in-out 0s;
+}
+

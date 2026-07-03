@@ -151,8 +151,47 @@ export function LoginPage() {
           }}
           sx={{
             "& .MuiOutlinedInput-root": {
-              borderRadius: 2,
-              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "primary.main" }
+              borderRadius: 3,
+              backgroundColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(255, 255, 255, 0.02)"
+                  : "rgba(0, 0, 0, 0.02)",
+              transition: "all 0.2s ease-in-out",
+              "& fieldset": {
+                borderColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.12)"
+                    : "rgba(0, 0, 0, 0.12)",
+              },
+              "&:hover fieldset": {
+                borderColor: "primary.light"
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "primary.main",
+                borderWidth: "1px"
+              },
+              "&.Mui-focused": {
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.04)"
+                    : "rgba(0, 0, 0, 0.01)",
+                boxShadow: (theme) =>
+                  `0 0 0 3px ${
+                    theme.palette.mode === "dark"
+                      ? "rgba(99, 102, 241, 0.15)"
+                      : "rgba(99, 102, 241, 0.08)"
+                  }`,
+              }
+            },
+            "& input:-webkit-autofill": {
+              WebkitBoxShadow: (theme) =>
+                `0 0 0 1000px ${
+                  theme.palette.mode === "dark" ? "#161d2b" : "#f3f4f6"
+                } inset !important`,
+              WebkitTextFillColor: (theme) =>
+                theme.palette.mode === "dark" ? "#F3F4F6 !important" : "#111827 !important",
+              transition: "background-color 5000s ease-in-out 0s",
+              borderRadius: "12px",
             }
           }}
         />
@@ -193,8 +232,47 @@ export function LoginPage() {
           }}
           sx={{
             "& .MuiOutlinedInput-root": {
-              borderRadius: 2,
-              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "primary.main" }
+              borderRadius: 3,
+              backgroundColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(255, 255, 255, 0.02)"
+                  : "rgba(0, 0, 0, 0.02)",
+              transition: "all 0.2s ease-in-out",
+              "& fieldset": {
+                borderColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.12)"
+                    : "rgba(0, 0, 0, 0.12)",
+              },
+              "&:hover fieldset": {
+                borderColor: "primary.light"
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "primary.main",
+                borderWidth: "1px"
+              },
+              "&.Mui-focused": {
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.04)"
+                    : "rgba(0, 0, 0, 0.01)",
+                boxShadow: (theme) =>
+                  `0 0 0 3px ${
+                    theme.palette.mode === "dark"
+                      ? "rgba(99, 102, 241, 0.15)"
+                      : "rgba(99, 102, 241, 0.08)"
+                  }`,
+              }
+            },
+            "& input:-webkit-autofill": {
+              WebkitBoxShadow: (theme) =>
+                `0 0 0 1000px ${
+                  theme.palette.mode === "dark" ? "#161d2b" : "#f3f4f6"
+                } inset !important`,
+              WebkitTextFillColor: (theme) =>
+                theme.palette.mode === "dark" ? "#F3F4F6 !important" : "#111827 !important",
+              transition: "background-color 5000s ease-in-out 0s",
+              borderRadius: "12px",
             }
           }}
         />
@@ -208,8 +286,8 @@ export function LoginPage() {
           size="large"
           disabled={loading || !username.trim() || !password.trim()}
           sx={{
-            borderRadius: 2,
-            py: 1.5,
+            borderRadius: 3,
+            py: 1.6,
             fontWeight: 700,
             fontSize: "1rem",
             textTransform: "none",
@@ -224,10 +302,6 @@ export function LoginPage() {
           {loading ? <CircularProgress size={22} color="inherit" /> : "Giriş Yap"}
         </Button>
 
-        {/* Hint */}
-        <Typography variant="caption" color="text.secondary" align="center">
-          Varsayılan: <strong>admin</strong> / <strong>admin123</strong>
-        </Typography>
       </Box>
     </Box>
   );

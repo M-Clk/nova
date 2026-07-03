@@ -47,7 +47,7 @@ import { useAuth } from "../auth/AuthContext";
 type UserDto = {
   id: string;
   username: string;
-  email: string;
+  email: string | null;
   role: string;
   isActive: boolean;
   createdAt: string;
@@ -55,14 +55,14 @@ type UserDto = {
 
 type CreateUserRequest = {
   username: string;
-  email: string;
+  email?: string;
   password: string;
   role: string;
 };
 
 type UpdateUserRequest = {
   username: string;
-  email: string;
+  email?: string;
   role: string;
   isActive: boolean;
   newPassword?: string;
@@ -151,7 +151,7 @@ function UserDialog({ open, mode, editUser, onClose, onSaved }: UserDialogProps)
   React.useEffect(() => {
     if (open && isEdit && editUser) {
       setUsername(editUser.username);
-      setEmail(editUser.email);
+      setEmail(editUser.email || "");
       setRole(editUser.role);
       setIsActive(editUser.isActive);
       setPassword("");
@@ -200,7 +200,7 @@ function UserDialog({ open, mode, editUser, onClose, onSaved }: UserDialogProps)
         setError("Şifre en az 6 karakter olmalıdır.");
         return;
       }
-      createMutation.mutate({ username, email, password, role });
+      createMutation.mutate({ username, email: email || undefined, password, role });
     } else {
       if (password && password.length < 6) {
         setError("Yeni şifre en az 6 karakter olmalıdır.");
@@ -208,7 +208,7 @@ function UserDialog({ open, mode, editUser, onClose, onSaved }: UserDialogProps)
       }
       updateMutation.mutate({
         id: editUser!.id,
-        req: { username, email, role, isActive, newPassword: password || undefined }
+        req: { username, email: email || undefined, role, isActive, newPassword: password || undefined }
       });
     }
   };
@@ -254,7 +254,6 @@ function UserDialog({ open, mode, editUser, onClose, onSaved }: UserDialogProps)
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
             fullWidth
             disabled={isPending}
             sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
@@ -355,7 +354,7 @@ function UserDialog({ open, mode, editUser, onClose, onSaved }: UserDialogProps)
           <Button
             type="submit"
             variant="contained"
-            disabled={isPending || !username || !email}
+            disabled={isPending || !username}
             startIcon={isPending ? <CircularProgress size={16} color="inherit" /> : undefined}
             sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700, px: 3 }}
           >

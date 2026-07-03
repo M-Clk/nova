@@ -39,15 +39,20 @@ public class UserService(IErpDbContext db) : IUserService
         if (exists)
             throw new InvalidOperationException($"'{request.Username}' kullanıcı adı zaten kullanılıyor.");
 
-        var emailExists = await db.Users.AnyAsync(u => u.Email == request.Email, ct);
-        if (emailExists)
-            throw new InvalidOperationException($"'{request.Email}' e-posta adresi zaten kullanılıyor.");
+        string? normalizedEmail = null;
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            normalizedEmail = request.Email.Trim().ToLowerInvariant();
+            var emailExists = await db.Users.AnyAsync(u => u.Email == normalizedEmail, ct);
+            if (emailExists)
+                throw new InvalidOperationException($"'{request.Email}' e-posta adresi zaten kullanılıyor.");
+        }
 
         var user = new User
         {
             Id = Guid.NewGuid(),
             Username = request.Username.Trim(),
-            Email = request.Email.Trim().ToLowerInvariant(),
+            Email = normalizedEmail,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             Role = request.Role,
             IsActive = true,
@@ -69,12 +74,17 @@ public class UserService(IErpDbContext db) : IUserService
         if (usernameTaken)
             throw new InvalidOperationException($"'{request.Username}' kullanıcı adı zaten kullanılıyor.");
 
-        var emailTaken = await db.Users.AnyAsync(u => u.Email == request.Email && u.Id != id, ct);
-        if (emailTaken)
-            throw new InvalidOperationException($"'{request.Email}' e-posta adresi zaten kullanılıyor.");
+        string? normalizedEmail = null;
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            normalizedEmail = request.Email.Trim().ToLowerInvariant();
+            var emailTaken = await db.Users.AnyAsync(u => u.Email == normalizedEmail && u.Id != id, ct);
+            if (emailTaken)
+                throw new InvalidOperationException($"'{request.Email}' e-posta adresi zaten kullanılıyor.");
+        }
 
         user.Username = request.Username.Trim();
-        user.Email = request.Email.Trim().ToLowerInvariant();
+        user.Email = normalizedEmail;
         user.Role = request.Role;
         user.IsActive = request.IsActive;
 

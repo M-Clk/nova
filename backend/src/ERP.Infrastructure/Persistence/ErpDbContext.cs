@@ -153,7 +153,7 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
             entity.ToTable("Users");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Username).HasMaxLength(80).IsRequired();
-            entity.Property(x => x.Email).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(180);
             entity.Property(x => x.PasswordHash).IsRequired();
             entity.Property(x => x.Role).HasMaxLength(40).IsRequired();
             entity.Property(x => x.IsActive).HasDefaultValue(true);

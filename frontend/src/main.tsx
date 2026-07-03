@@ -80,7 +80,7 @@ function RoleBadge({ role }: { role: string }) {
       color={cfg.color}
       size="small"
       icon={<>{cfg.icon}</>}
-      sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700, "& .MuiChip-icon": { ml: 0.5 } }}
+      sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700, "& .MuiChip-icon": { ml: 0.5 }, paddingLeft: "2px" }}
     />
   );
 }
