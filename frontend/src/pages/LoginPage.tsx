@@ -101,7 +101,7 @@ export function LoginPage() {
           <Box
             component="img"
             src="/logo.png"
-            alt="Nirvana Logo"
+            alt="Nova Logo"
             sx={{
               width: 96,
               height: 96,
@@ -112,7 +112,7 @@ export function LoginPage() {
           />
           <Box sx={{ textAlign: "center" }}>
             <Typography variant="h5" fontWeight={800} letterSpacing="-0.03em">
-              Nirvana
+              Nova
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               Devam etmek için giriş yapın

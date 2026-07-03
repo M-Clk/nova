@@ -1,13 +1,13 @@
 # Backup configuration
-$ContainerName = "erp-system-db-1"
-$DbUser = "erp"
-$DbName = "erpdb"
-$BackupDir = "D:\ERP_Backups"
+$ContainerName = "nova-db-1"
+$DbUser = "nova"
+$DbName = "novadb"
+$BackupDir = "D:\Nova_Backups"
 $RetentionDays = 10 # Delete backups older than 10 days
 
 # Create timestamp for unique filename
 $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$BackupFile = "erpdb_backup_$Timestamp.dump"
+$BackupFile = "novadb_backup_$Timestamp.dump"
 $TempContainerPath = "/tmp/$BackupFile"
 $LocalBackupPath = Join-Path $BackupDir $BackupFile
 
@@ -47,7 +47,7 @@ docker exec $ContainerName rm $TempContainerPath
 
 # 5. Retention policy: Remove backups older than $RetentionDays
 Write-Host "Applying retention policy (keeping last $RetentionDays days of backups)..." -ForegroundColor Yellow
-Get-ChildItem -Path $BackupDir -Filter "erpdb_backup_*.dump" | Where-Object {
+Get-ChildItem -Path $BackupDir -Filter "novadb_backup_*.dump" | Where-Object {
     $_.LastWriteTime -lt (Get-Date).AddDays(-$RetentionDays)
 } | Remove-Item -Force
 

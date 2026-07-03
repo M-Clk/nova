@@ -123,7 +123,7 @@ export function LicenseOverlay() {
                 {isAdmin ? "Lisans Aktivasyonu" : "Lisans Süresi Doldu"}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {licenseInfo?.customerName ? `${licenseInfo.customerName} adına kayıtlı lisans` : "Nirvana ERP Lisans Kontrolü"}
+                {licenseInfo?.customerName ? `${licenseInfo.customerName} adına kayıtlı lisans` : "Nova ERP Lisans Kontrolü"}
               </Typography>
             </Box>
           </Stack>
@@ -211,7 +211,7 @@ export function LicenseOverlay() {
           /* Non-Admin Locked View */
           <Box sx={{ textAlign: "center", py: 2 }}>
             <Typography variant="body1" sx={{ mb: 3, color: "text.secondary" }}>
-              Nirvana ERP lisansınız sona ermiştir. Uygulamayı kullanmaya devam edebilmek için lütfen sistem yöneticiniz (Admin) ile iletişime geçerek lisansın güncellenmesini isteyin.
+              Nova ERP lisansınız sona ermiştir. Uygulamayı kullanmaya devam edebilmek için lütfen sistem yöneticiniz (Admin) ile iletişime geçerek lisansın güncellenmesini isteyin.
             </Typography>
             <Button
               variant="outlined"

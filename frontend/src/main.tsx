@@ -128,7 +128,7 @@ function NavigationContent({ onClose }: { onClose?: () => void }) {
         <Box
           component="img"
           src="/logo.png"
-          alt="Nirvana Logo"
+          alt="Nova Logo"
           sx={{
             width: 38,
             height: 38,
@@ -138,7 +138,7 @@ function NavigationContent({ onClose }: { onClose?: () => void }) {
           }}
         />
         <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: "-0.02em" }}>
-          Nirvana
+          Nova
         </Typography>
       </Box>
 
@@ -268,7 +268,7 @@ function MainLayout() {
       case "/pos": return "POS Kasası";
       case "/users": return "Personel Yönetimi";
       case "/settings": return "Ayarlar";
-      default: return "Nirvana";
+      default: return "Nova";
     }
   };
 

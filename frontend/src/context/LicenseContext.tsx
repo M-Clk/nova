@@ -66,6 +66,14 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     };
   }, [checkLicense]);
 
+  useEffect(() => {
+    if (isLicenseValid && licenseInfo?.customerName) {
+      document.title = `Nova - ${licenseInfo.customerName}`;
+    } else {
+      document.title = "Nova - [İşletme Adı]";
+    }
+  }, [licenseInfo, isLicenseValid]);
+
   return (
     <LicenseContext.Provider value={{ isLicenseValid, licenseInfo, isChecking, checkLicense, activate }}>
       {children}

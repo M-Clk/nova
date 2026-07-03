@@ -19,13 +19,13 @@ public class LicenseService : ILicenseService
     
     // Gömülü Public Key - İmzaları doğrulamak için kullanılır
     private const string PublicKeyPem = @"-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuPHZMX0vmu4xbCzguPHd
-ocMeLm7Zu2veHzVhSR8VPpOjxqDFtRtAwFrEV0eLBVH3L3DVSD6YCuE9/mcN2g6C
-bsbDH/fBKzYPYFlB3+hr7T+K4vUVz0cwHu2XnNpwF7INCDjRf6aCnobjeHAS2Rcr
-VXQBJxsmhehof9dGLTc24UWnXA1dhRDuk93RLbd5od+Jbp4Rd+z+QQ2E/77jCbE0
-du4VqkFTXvHfYn1zXcf9CoiTNia6Pqi+LxM/voYdUONiAA55v2qzLiSfEtq4VuE6
-927pCPvZGx/13+CAdA/Gmleo8aDpEHOu0tpG0DHWSUXHPzMVMe7pEHeRZWS3xKIN
-vQIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxF5lME9f2MXuaNONukkQ
+HCeabdDZ/nnCpz9kJwtiD5XlaiUaLk72ukaL4RaA5TgPWjYmQWBiR0AKzdUU3i6E
+mYxbl7wuiuZeDfGJ415UnMdPL1CE8ntKSCFPzQeIXhPOptXMac6ykEJTcChP17zz
+ic50/mvv0ebh9IzfeJbNs/t0yIHqedWGDnswbqO/RyOCHE9J1NwUALjSzrf8Iogn
+4c+l8OJqntlsCe0lS8LT/C9VU00dKLAswda5wedaQsY5HUGX9dsTYWd0tkoF+kWv
+ZJnpjXbcRYvpACh5oDsMUWuJeyrgsTR0sgDxVFcnaDvZm43Nx0UMu61Z7rYFQzNC
+RQIDAQAB
 -----END PUBLIC KEY-----";
 
     // Lisans durumunu bellekte cache'leyelim (1 dakika boyunca DB'ye gitmesin)

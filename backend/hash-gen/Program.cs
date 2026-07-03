@@ -13,7 +13,7 @@ class Program
     static void Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
-        Console.WriteLine("=== Nirvana ERP Yardımcı Geliştirici Aracı ===");
+        Console.WriteLine("=== Nova ERP Yardımcı Geliştirici Aracı ===");
         
         while (true)
         {

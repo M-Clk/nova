@@ -493,7 +493,7 @@ export function DashboardPage() {
           Hoş Geldiniz, {user?.username ?? "Kullanıcı"}!
         </Typography>
         <Typography color="text.secondary" variant="body1">
-          Nirvana platformunun bugünkü durumuna genel bakış.
+          Nova platformunun bugünkü durumuna genel bakış.
         </Typography>
       </Box>
  

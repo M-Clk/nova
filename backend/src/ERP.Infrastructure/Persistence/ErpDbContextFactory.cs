@@ -8,7 +8,7 @@ public class ErpDbContextFactory : IDesignTimeDbContextFactory<ErpDbContext>
     public ErpDbContext CreateDbContext(string[] args)
     {
         var options = new DbContextOptionsBuilder<ErpDbContext>()
-            .UseNpgsql("Host=localhost;Port=5432;Database=erpdb;Username=erp;Password=erp")
+            .UseNpgsql("Host=localhost;Port=5432;Database=novadb;Username=nova;Password=nova")
             .Options;
 
         return new ErpDbContext(options);

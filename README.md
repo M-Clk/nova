@@ -1,4 +1,4 @@
-# Nirvana - Modern ERP Platformu
+# Nova - Modern ERP Platformu
 
 Basit, genisletilebilir ERP sistemi.
 
