@@ -29,6 +29,26 @@ public class ProductsController(IProductService products, IPosService pos) : Con
         return Ok(await products.GetAsync(cancellationToken));
     }
 
+    [HttpGet("export")]
+    public async Task<IActionResult> Export(
+        [FromQuery] string format = "csv",
+        [FromQuery] string? search = null,
+        [FromQuery] Guid? brandId = null,
+        [FromQuery] Guid? categoryId = null,
+        [FromQuery] bool? isActive = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await products.ExportProductsAsync(format, search, brandId, categoryId, isActive, cancellationToken);
+            return File(result.Content, result.ContentType, result.FileName);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ProductDto>> GetById(Guid id, CancellationToken cancellationToken)
     {

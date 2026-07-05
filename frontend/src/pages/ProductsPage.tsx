@@ -28,6 +28,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { DataTable } from "../components/DataTable";
 import { apiClient } from "../api/apiClient";
 import { ProductDto, ReferenceDataDto, PaginatedListDto } from "../api/types";
@@ -65,6 +66,8 @@ export function ProductsPage() {
     message: "",
     severity: "success"
   });
+
+  const [isExporting, setIsExporting] = useState(false);
 
   // Keyboard shortcut for F2
   useEffect(() => {
@@ -129,6 +132,40 @@ export function ProductsPage() {
       }));
     }
   }, [references.data, editingProductId]);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const response = await apiClient.get("/products/export", {
+        params: {
+          search: search || undefined,
+          brandId: filterBrand || undefined,
+          categoryId: filterCategory || undefined,
+          isActive: filterStatus === "all" ? undefined : filterStatus === "active",
+          format: "csv"
+        },
+        responseType: "blob"
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      const contentDisposition = response.headers["content-disposition"];
+      const filename = contentDisposition
+        ? contentDisposition.split("filename=")[1]?.replace(/"/g, "")
+        : `urunler_${new Date().toISOString().split("T")[0]}.csv`;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setSnack({ open: true, message: "Ürünler başarıyla indirildi.", severity: "success" });
+    } catch (err) {
+      console.error("Export failed", err);
+      setSnack({ open: true, message: "Ürünler indirilirken hata oluştu.", severity: "error" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const resetForm = () => {
     setForm({
@@ -249,22 +286,42 @@ export function ProductsPage() {
             Stok kalemlerinizi ve fiyatlarınızı yönetin
           </Typography>
         </Box>
-        {canManage && (
+        <Stack direction="row" spacing={1.5} alignItems="center">
           <Button
-            variant="contained"
-            color={isFormOpen ? "secondary" : "primary"}
-            startIcon={isFormOpen ? <CloseIcon /> : <AddIcon />}
-            onClick={() => {
-              if (isFormOpen) {
-                resetForm();
-              } else {
-                setIsFormOpen(true);
-              }
+            variant="outlined"
+            size="small"
+            startIcon={<FileDownloadOutlinedIcon />}
+            onClick={handleExport}
+            disabled={isExporting}
+            sx={{
+              borderRadius: 2,
+              textTransform: "none",
+              fontWeight: 600,
+              px: 2.5,
+              py: 1.1,
+              transition: "all 0.2s ease",
+              "&:hover": { transform: "translateY(-1px)" }
             }}
           >
-            {isFormOpen ? "Vazgeç" : "Ürün Ekle"}
+            {isExporting ? "Dışa Aktarılıyor..." : "CSV İndir"}
           </Button>
-        )}
+          {canManage && (
+            <Button
+              variant="contained"
+              color={isFormOpen ? "secondary" : "primary"}
+              startIcon={isFormOpen ? <CloseIcon /> : <AddIcon />}
+              onClick={() => {
+                if (isFormOpen) {
+                  resetForm();
+                } else {
+                  setIsFormOpen(true);
+                }
+              }}
+            >
+              {isFormOpen ? "Vazgeç" : "Ürün Ekle"}
+            </Button>
+          )}
+        </Stack>
       </Box>
 
       {/* Expandable Form Panel */}

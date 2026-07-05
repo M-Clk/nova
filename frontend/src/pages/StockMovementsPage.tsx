@@ -73,10 +73,19 @@ export function StockMovementsPage() {
   const [movementPage, setMovementPage] = useState(0);
   const [movementRowsPerPage, setMovementRowsPerPage] = useState(25);
 
+  // Pagination states for Current Stock
+  const [currentPage, setCurrentPage] = useState(0);
+  const [currentRowsPerPage, setCurrentRowsPerPage] = useState(25);
+
   // Reset page when filters change
   useEffect(() => {
     setMovementPage(0);
   }, [movementBarcodeSearch, movementNameSearch, movementWarehouse, movementType, movementStatus]);
+
+  // Reset page when current filters change
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [currentBarcodeSearch, currentNameSearch, currentWarehouse]);
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -105,8 +114,19 @@ export function StockMovementsPage() {
   });
 
   const current = useQuery({
-    queryKey: ["stock-current"],
-    queryFn: async () => (await apiClient.get<CurrentStockDto[]>("/stock/current")).data
+    queryKey: ["stock-current", currentPage, currentRowsPerPage, currentBarcodeSearch, currentNameSearch, currentWarehouse],
+    queryFn: async () => {
+      const response = await apiClient.get<PaginatedListDto<CurrentStockDto>>("/stock/current", {
+        params: {
+          page: currentPage + 1, // backend is 1-indexed
+          pageSize: currentRowsPerPage,
+          barcode: currentBarcodeSearch || undefined,
+          productName: currentNameSearch || undefined,
+          warehouseName: currentWarehouse || undefined
+        }
+      });
+      return response.data;
+    }
   });
   const movements = useQuery({
     queryKey: ["stock-movements", movementPage, movementRowsPerPage, movementBarcodeSearch, movementNameSearch, movementWarehouse, movementType, movementStatus],
@@ -289,20 +309,10 @@ export function StockMovementsPage() {
 
   const selectedProduct = products.data?.find(p => p.id === form.productId);
 
-  // Client-side current stock status filters
+  // Current stock level items from the paginated API response
   const filteredCurrent = useMemo(() => {
-    const list = current.data ?? [];
-    const bcTerm = currentBarcodeSearch.trim().toLowerCase();
-    const nameTerm = currentNameSearch.trim().toLowerCase();
-
-    return list.filter((s) => {
-      const matchesBarcode = !bcTerm || s.productBarcode?.toLowerCase().includes(bcTerm);
-      const matchesName = !nameTerm || s.productName.toLowerCase().includes(nameTerm);
-      const matchesWarehouse = !currentWarehouse || s.warehouseName === currentWarehouse;
-
-      return matchesBarcode && matchesName && matchesWarehouse;
-    });
-  }, [current.data, currentBarcodeSearch, currentNameSearch, currentWarehouse]);
+    return current.data?.items ?? [];
+  }, [current.data]);
 
   const handleClearCurrentFilters = () => {
     setCurrentBarcodeVal("");
@@ -655,6 +665,21 @@ export function StockMovementsPage() {
               {s.quantity.toFixed(2)}
             </Typography>
           ])}
+        />
+
+        <TablePagination
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          component="div"
+          count={current.data?.totalCount ?? 0}
+          rowsPerPage={currentRowsPerPage}
+          page={currentPage}
+          onPageChange={(_, newPage) => setCurrentPage(newPage)}
+          onRowsPerPageChange={(e) => {
+            setCurrentRowsPerPage(parseInt(e.target.value, 10));
+            setCurrentPage(0);
+          }}
+          labelRowsPerPage="Sayfa başına satır:"
+          labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
         />
       </Box>
 

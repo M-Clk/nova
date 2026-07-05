@@ -8,6 +8,13 @@ namespace ERP.Application.Services;
 public interface IStockService
 {
     Task<IReadOnlyList<CurrentStockDto>> GetCurrentAsync(CancellationToken cancellationToken = default);
+    Task<PaginatedListDto<CurrentStockDto>> GetPagedCurrentAsync(
+        int page,
+        int pageSize,
+        string? barcode,
+        string? productName,
+        string? warehouseName,
+        CancellationToken cancellationToken = default);
     Task<IReadOnlyList<StockMovementDto>> GetMovementsAsync(CancellationToken cancellationToken = default);
     Task<PaginatedListDto<StockMovementDto>> GetPagedMovementsAsync(
         int page,
@@ -72,6 +79,89 @@ public class StockService(IErpDbContext db) : IStockService
                 g.Quantity))
             .OrderBy(x => x.ProductName)
             .ToList();
+    }
+
+    public async Task<PaginatedListDto<CurrentStockDto>> GetPagedCurrentAsync(
+        int page,
+        int pageSize,
+        string? barcode,
+        string? productName,
+        string? warehouseName,
+        CancellationToken cancellationToken = default)
+    {
+        var query = db.StockMovements
+            .AsNoTracking()
+            .Where(x => !x.IsCancelled);
+
+        if (!string.IsNullOrWhiteSpace(barcode))
+        {
+            var cleanBarcode = barcode.Trim().ToLower();
+            query = query.Where(x => x.Product != null && x.Product.Barcode.ToLower().Contains(cleanBarcode));
+        }
+
+        if (!string.IsNullOrWhiteSpace(productName))
+        {
+            var cleanName = productName.Trim().ToLower();
+            query = query.Where(x => x.Product != null && x.Product.Name.ToLower().Contains(cleanName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(warehouseName))
+        {
+            query = query.Where(x => x.Warehouse != null && x.Warehouse.Name == warehouseName);
+        }
+
+        // Group by product and warehouse IDs only (to avoid complex translation errors in GroupBy key)
+        var groupedQuery = query.GroupBy(x => new { x.ProductId, x.WarehouseId });
+
+        // Calculate total unique Product+Warehouse combinations that match the filters
+        var totalCount = await groupedQuery.CountAsync(cancellationToken);
+
+        // Fetch paginated keys and sum quantity first
+        var pagedGrouped = await groupedQuery
+            .Select(g => new
+            {
+                g.Key.ProductId,
+                g.Key.WarehouseId,
+                Quantity = g.Sum(m => m.Quantity),
+                ProductName = db.Products.Where(p => p.Id == g.Key.ProductId).Select(p => p.Name).FirstOrDefault() ?? string.Empty
+            })
+            .OrderBy(x => x.ProductName)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        // Fetch details for the paged subset only
+        var productIds = pagedGrouped.Select(g => g.ProductId).Distinct().ToList();
+        var warehouseIds = pagedGrouped.Select(g => g.WarehouseId).Distinct().ToList();
+
+        var products = await db.Products
+            .AsNoTracking()
+            .Where(p => productIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.Code, p.Name, p.Barcode })
+            .ToListAsync(cancellationToken);
+
+        var warehouses = await db.Warehouses
+            .AsNoTracking()
+            .Where(w => warehouseIds.Contains(w.Id))
+            .Select(w => new { w.Id, w.Name })
+            .ToListAsync(cancellationToken);
+
+        var productMap = products.ToDictionary(p => p.Id);
+        var warehouseMap = warehouses.ToDictionary(w => w.Id);
+
+        var items = pagedGrouped
+            .Select(g => new CurrentStockDto(
+                g.ProductId,
+                productMap.TryGetValue(g.ProductId, out var p) ? p.Code : string.Empty,
+                productMap.TryGetValue(g.ProductId, out var p2) ? p2.Name : string.Empty,
+                productMap.TryGetValue(g.ProductId, out var p3) ? p3.Barcode : string.Empty,
+                g.WarehouseId,
+                warehouseMap.TryGetValue(g.WarehouseId, out var w) ? w.Name : string.Empty,
+                g.Quantity))
+            .OrderBy(x => x.ProductName)
+            .ToList();
+
+        return new PaginatedListDto<CurrentStockDto>(items, totalCount);
     }
 
     public Task<IReadOnlyList<StockMovementDto>> GetMovementsAsync(CancellationToken cancellationToken = default)

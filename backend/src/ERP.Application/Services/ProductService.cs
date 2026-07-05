@@ -13,9 +13,16 @@ public interface IProductService
     Task<ProductDto> CreateAsync(CreateProductRequest request, CancellationToken cancellationToken = default);
     Task<bool> UpdateAsync(Guid id, UpdateProductRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<ExportResult> ExportProductsAsync(
+        string format,
+        string? search,
+        Guid? brandId,
+        Guid? categoryId,
+        bool? isActive,
+        CancellationToken cancellationToken = default);
 }
 
-public class ProductService(IErpDbContext db) : IProductService
+public class ProductService(IErpDbContext db, IReportExporterFactory exporterFactory) : IProductService
 {
     public Task<IReadOnlyList<ProductDto>> GetAsync(CancellationToken cancellationToken = default)
     {
@@ -136,6 +143,72 @@ public class ProductService(IErpDbContext db) : IProductService
         product.IsActive = false;
         await db.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async Task<ExportResult> ExportProductsAsync(
+        string format,
+        string? search,
+        Guid? brandId,
+        Guid? categoryId,
+        bool? isActive,
+        CancellationToken cancellationToken = default)
+    {
+        var query = db.Products.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var cleanSearch = search.Trim().ToLower();
+            query = query.Where(x => 
+                x.Code.ToLower().Contains(cleanSearch) || 
+                x.Name.ToLower().Contains(cleanSearch) || 
+                x.Barcode.ToLower().Contains(cleanSearch)
+            );
+        }
+
+        if (brandId.HasValue)
+        {
+            query = query.Where(x => x.BrandId == brandId.Value);
+        }
+
+        if (categoryId.HasValue)
+        {
+            query = query.Where(x => x.CategoryId == categoryId.Value);
+        }
+
+        if (isActive.HasValue)
+        {
+            query = query.Where(x => x.IsActive == isActive.Value);
+        }
+
+        query = query.OrderBy(x => x.Name);
+
+        var list = await ProductQuery(query).ToListAsync(cancellationToken);
+        var exporter = exporterFactory.GetExporter(format);
+
+        var headers = new[]
+        {
+            "Ürün Kodu", "Barkod", "Ürün Adı", "Marka", "Kategori",
+            "Birim", "Alış Fiyatı", "Satış Fiyatı", "Min. Stok", "Durum"
+        };
+
+        var rows = list.Select(item => new[]
+        {
+            item.Code,
+            item.Barcode,
+            item.Name,
+            item.BrandName,
+            item.CategoryName,
+            item.UnitName,
+            item.PurchasePrice.ToString("N2"),
+            item.SalePrice.ToString("N2"),
+            item.MinStock.ToString("N2"),
+            item.IsActive ? "Aktif" : "Pasif"
+        });
+
+        var content = exporter.Export(headers, rows);
+        var fileName = $"urunler_{DateTime.UtcNow:yyyyMMdd_HHmmss}{exporter.FileExtension}";
+
+        return new ExportResult(content, exporter.ContentType, fileName);
     }
 
     private IQueryable<ProductDto> ProductQuery(IQueryable<Product> query)

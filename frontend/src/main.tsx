@@ -41,6 +41,7 @@ import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlin
 import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import SupervisorAccountOutlinedIcon from "@mui/icons-material/SupervisorAccountOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProductsPage } from "./pages/ProductsPage";
@@ -52,6 +53,7 @@ import { POSPage } from "./pages/POSPage";
 import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/UsersPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ReportsPage } from "./pages/ReportsPage";
 import { AppThemeProvider, useThemeMode } from "./theme/ThemeContext";
 import "./styles.css";
 
@@ -107,6 +109,9 @@ function NavigationContent({ onClose }: { onClose?: () => void }) {
       ? [{ to: "/sales", label: "Satışlar", icon: <MonetizationOnOutlinedIcon /> }]
       : []),
     { to: "/stock", label: "Stok Hareketleri", icon: <SwapHorizOutlinedIcon /> },
+    ...((user?.role === "Admin" || user?.role === "Manager")
+      ? [{ to: "/reports", label: "Raporlar", icon: <AssessmentOutlinedIcon /> }]
+      : []),
     { to: "/customers", label: "Müşteriler", icon: <PeopleOutlinedIcon /> },
     { to: "/warehouses", label: "Depolar", icon: <BusinessOutlinedIcon /> },
     { to: "/pos", label: "POS Kasası", icon: <PointOfSaleIcon /> },
@@ -266,6 +271,7 @@ function MainLayout() {
       case "/customers": return "Müşteri Rehberi";
       case "/warehouses": return "Depo Yönetimi";
       case "/pos": return "POS Kasası";
+      case "/reports": return "Raporlar";
       case "/users": return "Personel Yönetimi";
       case "/settings": return "Ayarlar";
       default: return "Nova";
@@ -361,6 +367,7 @@ function App() {
                     <Route path="customers" element={<CustomersPage />} />
                     <Route path="warehouses" element={<WarehousesPage />} />
                     <Route path="pos" element={<POSPage />} />
+                    <Route path="reports" element={<AllowedRolesRoute roles={["Admin", "Manager"]}><ReportsPage /></AllowedRolesRoute>} />
                     <Route path="users" element={<AllowedRolesRoute roles={["Admin"]}><UsersPage /></AllowedRolesRoute>} />
                     <Route path="settings" element={<SettingsPage />} />
                   </Route>

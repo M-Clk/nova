@@ -190,3 +190,88 @@ export interface PaginatedListDto<T> {
   totalCount: number;
 }
 
+// ─── Report Types ────────────────────────────────────────────────────────────
+
+export type StockSummaryReportDto = {
+  totalProductCount: number;
+  activeProductCount: number;
+  totalStockValue: number;
+  criticalStockCount: number;
+  outOfStockCount: number;
+  warehouseDistribution: WarehouseStockDistributionDto[];
+  criticalStockItems: CriticalStockItemDto[];
+};
+
+export type WarehouseStockDistributionDto = {
+  warehouseId: string;
+  warehouseName: string;
+  productCount: number;
+  totalQuantity: number;
+  totalValue: number;
+};
+
+export type CriticalStockItemDto = {
+  productId: string;
+  productCode: string;
+  productName: string;
+  productBarcode: string;
+  warehouseName: string;
+  currentQuantity: number;
+  minStock: number;
+  stockRatio: number;
+};
+
+export type StockMovementReportDto = {
+  startDate: string;
+  endDate: string;
+  totalMovementCount: number;
+  totalInboundQuantity: number;
+  totalOutboundQuantity: number;
+  netQuantityChange: number;
+  typeSummaries: MovementTypeSummaryDto[];
+  items: StockMovementReportItemDto[];
+};
+
+export type MovementTypeSummaryDto = {
+  typeId: number;
+  typeName: string;
+  count: number;
+  totalQuantity: number;
+  totalValue: number;
+};
+
+export type StockMovementReportItemDto = {
+  id: string;
+  productCode: string;
+  productName: string;
+  productBarcode: string;
+  warehouseName: string;
+  type: number;
+  typeName: string;
+  quantity: number;
+  unitPrice: number;
+  lineValue: number;
+  referenceType: string;
+  isCancelled: boolean;
+  createdAt: string;
+};
+
+export type LowStockReportDto = {
+  totalCount: number;
+  outOfStockCount: number;
+  criticalCount: number;
+  warningCount: number;
+  items: LowStockItemDto[];
+};
+
+export type LowStockItemDto = {
+  productId: string;
+  productCode: string;
+  productName: string;
+  productBarcode: string;
+  warehouseName: string;
+  currentQuantity: number;
+  minStock: number;
+  stockRatio: number;
+  alertLevel: string;
+};

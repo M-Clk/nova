@@ -11,8 +11,22 @@ namespace ERP.Api.Controllers;
 public class StockController(IStockService stock) : ControllerBase
 {
     [HttpGet("current")]
-    public async Task<ActionResult<IReadOnlyList<CurrentStockDto>>> GetCurrent(CancellationToken cancellationToken)
-        => Ok(await stock.GetCurrentAsync(cancellationToken));
+    public async Task<IActionResult> GetCurrent(
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        [FromQuery] string? barcode,
+        [FromQuery] string? productName,
+        [FromQuery] string? warehouseName,
+        CancellationToken cancellationToken)
+    {
+        if (page.HasValue && pageSize.HasValue)
+        {
+            var result = await stock.GetPagedCurrentAsync(page.Value, pageSize.Value, barcode, productName, warehouseName, cancellationToken);
+            return Ok(result);
+        }
+
+        return Ok(await stock.GetCurrentAsync(cancellationToken));
+    }
 
     [HttpGet("movements")]
     public async Task<IActionResult> GetMovements(

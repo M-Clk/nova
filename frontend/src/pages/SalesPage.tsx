@@ -13,7 +13,8 @@ import {
   IconButton,
   Chip,
   InputAdornment,
-  TablePagination
+  TablePagination,
+  Autocomplete
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
@@ -207,20 +208,41 @@ export function SalesPage() {
 
             {/* Product selection & quantities */}
             <Grid item xs={12} sm={6} md={4}>
-              <TextField 
-                select 
-                label="Ürün Seç" 
-                value={productId} 
-                onChange={(e) => handleProductChange(e.target.value)} 
-                required 
-                fullWidth
-              >
-                {(products.data ?? []).map((product) => (
-                  <MenuItem key={product.id} value={product.id}>
-                    {product.code} - {product.name} (₺{product.salePrice.toFixed(2)})
-                  </MenuItem>
-                ))}
-              </TextField>
+              <Autocomplete
+                options={products.data ?? []}
+                getOptionLabel={(option) => `${option.code} — ${option.name} (₺${option.salePrice.toFixed(2)})`}
+                filterOptions={(options, state) => {
+                  const search = state.inputValue.toLowerCase().trim();
+                  if (!search) return options.slice(0, 50);
+                  return options
+                    .filter(
+                      (o) =>
+                        o.name.toLowerCase().includes(search) ||
+                        o.code.toLowerCase().includes(search) ||
+                        (o.barcode && o.barcode.toLowerCase().includes(search))
+                    )
+                    .slice(0, 50); // Limit to 50 options to prevent lag
+                }}
+                value={products.data?.find(p => p.id === productId) || null}
+                onChange={(_, newValue) => {
+                  if (newValue) {
+                    handleProductChange(newValue.id);
+                  } else {
+                    setProductId("");
+                    setUnitPrice("");
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Ürün Seç / Ara"
+                    placeholder="Ürün adı, kod veya barkod yazın..."
+                    required
+                    fullWidth
+                  />
+                )}
+                noOptionsText="Ürün bulunamadı"
+              />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
               <TextField 
