@@ -54,6 +54,8 @@ import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
 import StarOutlineIcon from "@mui/icons-material/StarOutline";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import KeyIcon from "@mui/icons-material/Key";
+import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
+import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
 
 import { useThemeMode } from "../theme/ThemeContext";
 import { useAuth } from "../auth/AuthContext";
@@ -1321,6 +1323,158 @@ function LicenseTabContent() {
   );
 }
 
+// ─── Sistem Tab Content ──────────────────────────────────────────────────────────
+
+interface SystemInfoResponse {
+  version: string;
+  os: string;
+  runtime: string;
+  databaseConnected: boolean;
+  serverTime: string;
+}
+
+interface UpdateCheckResponse {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  releaseNotes?: string;
+  releaseDate?: string;
+  message: string;
+}
+
+function SystemTabContent() {
+  const [isCheckingManual, setIsCheckingManual] = useState(false);
+
+  const { data: systemInfo, isLoading: isInfoLoading, refetch: refetchInfo } = useQuery<SystemInfoResponse>({
+    queryKey: ["system-info"],
+    queryFn: async () => (await apiClient.get<SystemInfoResponse>("/system/info")).data
+  });
+
+  const { data: updateInfo, isLoading: isUpdateLoading, refetch: refetchUpdate } = useQuery<UpdateCheckResponse>({
+    queryKey: ["system-update-check"],
+    queryFn: async () => (await apiClient.get<UpdateCheckResponse>("/system/check-update")).data,
+    enabled: true
+  });
+
+  const handleCheckUpdates = async () => {
+    setIsCheckingManual(true);
+    await Promise.all([refetchInfo(), refetchUpdate()]);
+    setIsCheckingManual(false);
+  };
+
+  const isChecking = isInfoLoading || isUpdateLoading || isCheckingManual;
+
+  return (
+    <Box>
+      <Stack spacing={3}>
+        {/* Durum Kartı */}
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Box>
+            <Typography variant="body2" color="text.secondary" fontWeight={500}>Veri Tabanı Bağlantısı</Typography>
+            <Typography variant="body1" fontWeight={700} sx={{ mt: 0.5 }}>
+              {isChecking ? "Kontrol ediliyor..." : (systemInfo?.databaseConnected ? "Bağlantı Başarılı" : "Bağlantı Başarısız")}
+            </Typography>
+          </Box>
+          {!isChecking && (
+            <Chip 
+              label={systemInfo?.databaseConnected ? "Aktif" : "Hata"} 
+              color={systemInfo?.databaseConnected ? "success" : "error"} 
+              size="small" 
+              sx={{ fontWeight: 700 }}
+            />
+          )}
+        </Stack>
+
+        <Divider />
+
+        {/* Detaylı Bilgiler */}
+        <Stack spacing={2}>
+          <Box>
+            <Typography variant="body2" color="text.secondary">Uygulama Adı</Typography>
+            <Typography variant="body1" fontWeight={600}>Nova ERP</Typography>
+          </Box>
+          <Box>
+            <Typography variant="body2" color="text.secondary">Mevcut Versiyon</Typography>
+            <Typography variant="body1" fontWeight={600}>{systemInfo?.version || "—"}</Typography>
+          </Box>
+          <Box>
+            <Typography variant="body2" color="text.secondary">Sunucu İşletim Sistemi</Typography>
+            <Typography variant="body1" fontWeight={600}>{systemInfo?.os || "—"}</Typography>
+          </Box>
+          <Box>
+            <Typography variant="body2" color="text.secondary">Sunucu Çalışma Zamanı (.NET)</Typography>
+            <Typography variant="body1" fontWeight={600}>{systemInfo?.runtime || "—"}</Typography>
+          </Box>
+        </Stack>
+
+        <Divider />
+
+        {/* Güncelleme Durumu */}
+        <Box>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Güncelleme Durumu</Typography>
+          
+          {isChecking ? (
+            <Stack direction="row" alignItems="center" spacing={2} sx={{ py: 2 }}>
+              <CircularProgress size={24} />
+              <Typography variant="body2" color="text.secondary">Güncellemeler denetleniyor, lütfen bekleyin...</Typography>
+            </Stack>
+          ) : updateInfo ? (
+            <Stack spacing={2}>
+              {updateInfo.updateAvailable ? (
+                <>
+                  <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                    <strong>Yeni Güncelleme Mevcut! ({updateInfo.latestVersion})</strong>
+                    <Typography variant="body2" sx={{ mt: 0.5 }}>
+                      {updateInfo.message}
+                    </Typography>
+                  </Alert>
+                  
+                  {updateInfo.releaseDate && (
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">Yayınlanma Tarihi</Typography>
+                      <Typography variant="body2" fontWeight={600}>{updateInfo.releaseDate}</Typography>
+                    </Box>
+                  )}
+
+                  {updateInfo.releaseNotes && (
+                    <Box sx={{ bgcolor: "action.hover", p: 2, borderRadius: 2, border: 1, borderColor: "divider" }}>
+                      <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>Sürüm Notları:</Typography>
+                      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+                        {updateInfo.releaseNotes}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  <Alert severity="info" sx={{ borderRadius: 2 }}>
+                    Güncellemeyi uygulamak için lütfen sunucu terminalinde <code>scripts/update-nova.ps1</code> komutunu çalıştırın. Bu işlem veri tabanınızı yedekler ve en son Docker imajlarını otomatik çeker.
+                  </Alert>
+                </>
+              ) : (
+                <Alert severity="success" sx={{ borderRadius: 2 }}>
+                  Sisteminiz güncel. Herhangi bir güncelleme işlemi gerekmiyor.
+                </Alert>
+              )}
+            </Stack>
+          ) : (
+            <Typography variant="body2" color="text.secondary">Güncelleme bilgisi alınamadı.</Typography>
+          )}
+
+          {!isChecking && (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleCheckUpdates}
+              sx={{ mt: 2, borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+            >
+              Güncellemeleri Yeniden Denetle
+            </Button>
+          )}
+        </Box>
+      </Stack>
+    </Box>
+  );
+}
+
 // ─── Profil Tab Content ──────────────────────────────────────────────────────────
 
 function ProfileTabContent() {
@@ -1445,6 +1599,14 @@ export function SettingsPage() {
           label: "Lisans", 
           icon: <KeyIcon fontSize="small" />, 
           component: <SettingsSection title="Lisans Bilgileri" icon={<KeyIcon fontSize="small" />}><LicenseTabContent /></SettingsSection> 
+        }
+      );
+
+      list.push(
+        { 
+          label: "Sistem Güncelleme", 
+          icon: <SystemUpdateAltIcon fontSize="small" />, 
+          component: <SettingsSection title="Sistem Bilgileri ve Güncelleme" icon={<DnsOutlinedIcon fontSize="small" />}><SystemTabContent /></SettingsSection> 
         }
       );
     }

@@ -1,8 +1,6 @@
 services:
   api:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    image: mclk2148/nova-api:latest
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=novadb;Username=nova;Password=nova
@@ -13,15 +11,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: always
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: mclk2148/nova-frontend:latest
     ports:
       - "5173:80"
     depends_on:
       - api
+    restart: always
 
   db:
     image: postgres:16
@@ -38,17 +36,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  # Otomatik arka plan güncellemeleri için Watchtower'ı aktif edebilirsiniz:
-  # watchtower:
-  #   image: containrrr/watchtower
-  #   container_name: watchtower
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #     # Özel registry kimlik bilgileri için (opsiyonel):
-  #     # - ~/.docker/config.json:/config.json
-  #   command: --interval 3600 --cleanup --label-enable
-  #   restart: unless-stopped
+    restart: always
 
 volumes:
   nova-postgres-data:
