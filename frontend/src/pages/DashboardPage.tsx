@@ -14,7 +14,9 @@ import {
   Avatar, 
   Divider,
   Chip,
-  Button
+  Button,
+  CircularProgress,
+  Skeleton
 } from "@mui/material";
 import { apiClient } from "../api/apiClient";
 import { CurrentStockDto, ProductDto, SaleDto, StockMovementDto } from "../api/types";
@@ -392,7 +394,17 @@ export function DashboardPage() {
       <Divider sx={{ mb: 2 }} />
       <Box sx={{ flex: 1, overflowY: "auto", pr: 0.5 }}>
         {stock.isLoading || products.isLoading ? (
-          <Typography color="text.secondary">Yükleniyor...</Typography>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Box key={i}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+                  <Skeleton variant="text" width="45%" height={18} />
+                  <Skeleton variant="text" width="25%" height={18} />
+                </Box>
+                <Skeleton variant="rectangular" width="100%" height={6} sx={{ borderRadius: 3 }} animation="wave" />
+              </Box>
+            ))}
+          </Box>
         ) : categoryStockData.length === 0 ? (
           <Typography color="text.secondary">Stok kaydı bulunamadı.</Typography>
         ) : (
@@ -446,8 +458,20 @@ export function DashboardPage() {
       </Box>
       <Divider />
       {products.isLoading || stock.isLoading ? (
-        <Box sx={{ py: 8, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Typography color="text.secondary">Yükleniyor...</Typography>
+        <Box sx={{ flex: 1, pt: 2 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.5, borderBottom: i < 3 ? "1px solid" : "none", borderColor: "divider" }}>
+              <Skeleton variant="circular" width={28} height={28} />
+              <Box sx={{ flex: 1 }}>
+                <Skeleton variant="text" width="60%" height={18} />
+                <Skeleton variant="text" width="40%" height={14} />
+              </Box>
+              <Box sx={{ textAlign: "right" }}>
+                <Skeleton variant="text" width={50} height={18} />
+                <Skeleton variant="text" width={40} height={14} />
+              </Box>
+            </Box>
+          ))}
         </Box>
       ) : lowStockItems.length === 0 ? (
         <Box sx={{ py: 8, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -508,6 +532,7 @@ export function DashboardPage() {
               icon={<TrendingUpOutlinedIcon />}
               color="#10B981"
               bgColor="rgba(16, 185, 129, 0.08)"
+              isLoading={sales.isLoading}
             />
             <MetricCard
               title="Satış Siparişleri"
@@ -516,6 +541,7 @@ export function DashboardPage() {
               icon={<ShoppingBagOutlinedIcon />}
               color="#EC4899"
               bgColor="rgba(236, 72, 153, 0.08)"
+              isLoading={sales.isLoading}
             />
             <MetricCard
               title="Envanter Maliyeti (Alış)"
@@ -524,6 +550,7 @@ export function DashboardPage() {
               icon={<AccountBalanceWalletOutlinedIcon />}
               color="#F59E0B"
               bgColor="rgba(245, 158, 11, 0.08)"
+              isLoading={stock.isLoading || products.isLoading}
             />
             <MetricCard
               title="Ürün Kataloğu"
@@ -532,6 +559,7 @@ export function DashboardPage() {
               icon={<Inventory2OutlinedIcon />}
               color="#6366F1"
               bgColor="rgba(99, 102, 241, 0.08)"
+              isLoading={products.isLoading}
             />
           </>
         ) : (
@@ -544,6 +572,7 @@ export function DashboardPage() {
               color="#F59E0B"
               bgColor="rgba(245, 158, 11, 0.08)"
               gridWidth={6}
+              isLoading={stock.isLoading}
             />
             <MetricCard
               title="Ürün Kataloğu"
@@ -553,6 +582,7 @@ export function DashboardPage() {
               color="#6366F1"
               bgColor="rgba(99, 102, 241, 0.08)"
               gridWidth={6}
+              isLoading={products.isLoading}
             />
           </>
         )}
@@ -613,7 +643,10 @@ export function DashboardPage() {
                 <Divider sx={{ mb: 2 }} />
                 <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {sales.isLoading ? (
-                    <Typography color="text.secondary">Yükleniyor...</Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
+                      <CircularProgress size={32} thickness={4} />
+                      <Typography variant="caption" color="text.secondary" fontWeight={500}>Veriler yükleniyor...</Typography>
+                    </Box>
                   ) : salesTrendData.length === 0 ? (
                     <Typography color="text.secondary">Yeterli satış verisi yok.</Typography>
                   ) : (
@@ -650,8 +683,17 @@ export function DashboardPage() {
                 </Box>
                 <Divider />
                 {movements.isLoading ? (
-                  <Box sx={{ py: 8, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Typography color="text.secondary">Yükleniyor...</Typography>
+                  <Box sx={{ flex: 1, pt: 2 }}>
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.5, borderBottom: i < 3 ? "1px solid" : "none", borderColor: "divider" }}>
+                        <Skeleton variant="circular" width={28} height={28} />
+                        <Box sx={{ flex: 1 }}>
+                          <Skeleton variant="text" width="65%" height={18} />
+                          <Skeleton variant="text" width="45%" height={14} />
+                        </Box>
+                        <Skeleton variant="text" width={50} height={18} />
+                      </Box>
+                    ))}
                   </Box>
                 ) : topSellingProducts.length === 0 ? (
                   <Box sx={{ py: 8, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -718,8 +760,19 @@ export function DashboardPage() {
                 </Box>
                 <Divider />
                 {sales.isLoading ? (
-                  <Box sx={{ py: 8, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Typography color="text.secondary">Yükleniyor...</Typography>
+                  <Box sx={{ flex: 1, pt: 2 }}>
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.5, borderBottom: i < 3 ? "1px solid" : "none", borderColor: "divider" }}>
+                        <Box sx={{ flex: 1 }}>
+                          <Skeleton variant="text" width="55%" height={18} />
+                          <Skeleton variant="text" width="70%" height={14} />
+                          <Skeleton variant="text" width="50%" height={14} />
+                        </Box>
+                        <Box sx={{ textAlign: "right" }}>
+                          <Skeleton variant="text" width={70} height={18} />
+                        </Box>
+                      </Box>
+                    ))}
                   </Box>
                 ) : recentSales.length === 0 ? (
                   <Box sx={{ py: 8, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -795,9 +848,10 @@ interface MetricCardProps {
   color: string;
   bgColor: string;
   gridWidth?: number;
+  isLoading?: boolean;
 }
 
-function MetricCard({ title, value, subtitle, icon, color, bgColor, gridWidth = 3 }: MetricCardProps) {
+function MetricCard({ title, value, subtitle, icon, color, bgColor, gridWidth = 3, isLoading = false }: MetricCardProps) {
   const theme = useTheme();
 
   return (
@@ -817,16 +871,25 @@ function MetricCard({ title, value, subtitle, icon, color, bgColor, gridWidth = 
             : `0 4px 20px rgba(100, 116, 139, 0.05)`,
         }}
       >
-        <Box>
+        <Box sx={{ flex: 1 }}>
           <Typography color="text.secondary" variant="body2" fontWeight={600} sx={{ mb: 1, textTransform: "uppercase", fontSize: "0.75rem", letterSpacing: "0.05em" }}>
             {title}
           </Typography>
-          <Typography variant="h3" fontWeight={850} sx={{ mb: 0.5, letterSpacing: "-0.03em" }}>
-            {value}
-          </Typography>
-          <Typography color="text.secondary" variant="caption">
-            {subtitle}
-          </Typography>
+          {isLoading ? (
+            <>
+              <Skeleton variant="text" width="55%" height={52} sx={{ mb: 0, transform: "none", borderRadius: 1 }} animation="wave" />
+              <Skeleton variant="text" width="70%" height={18} sx={{ mt: 0.5, borderRadius: 1 }} animation="wave" />
+            </>
+          ) : (
+            <>
+              <Typography variant="h3" fontWeight={850} sx={{ mb: 0.5, letterSpacing: "-0.03em" }}>
+                {value}
+              </Typography>
+              <Typography color="text.secondary" variant="caption">
+                {subtitle}
+              </Typography>
+            </>
+          )}
         </Box>
         <Avatar 
           sx={{ 
@@ -834,7 +897,9 @@ function MetricCard({ title, value, subtitle, icon, color, bgColor, gridWidth = 
             color: color, 
             width: 48, 
             height: 48,
-            boxShadow: `0 2px 8px ${bgColor}`
+            boxShadow: `0 2px 8px ${bgColor}`,
+            opacity: isLoading ? 0.5 : 1,
+            transition: "opacity 0.3s ease"
           }}
         >
           {icon}

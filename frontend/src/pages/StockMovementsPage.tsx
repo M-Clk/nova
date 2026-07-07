@@ -651,6 +651,7 @@ export function StockMovementsPage() {
         </Paper>
 
         <DataTable
+          isLoading={current.isLoading}
           columns={["Barkod", "Ürün Kodu", "Ürün Adı", "Depo Adı", "Mevcut Miktar"]}
           rows={filteredCurrent.map(s => [
             s.productBarcode || <span style={{ opacity: 0.5 }}>—</span>,
@@ -824,6 +825,7 @@ export function StockMovementsPage() {
         </Paper>
 
         <DataTable
+          isLoading={movements.isLoading}
           columns={canManage ? ["Barkod", "Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih", "İşlemler"] : ["Barkod", "Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih"]}
           rows={(movements.data?.items ?? []).map(m => {
             const isManual = m.referenceType === "MANUAL";

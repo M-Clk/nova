@@ -7,10 +7,18 @@ import {
   TableContainer, 
   TableHead, 
   TableRow,
+  Skeleton,
   useTheme 
 } from "@mui/material";
 
-export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Array<ReactNode>> }) {
+interface DataTableProps {
+  columns: string[];
+  rows: Array<Array<ReactNode>>;
+  isLoading?: boolean;
+  skeletonRows?: number;
+}
+
+export function DataTable({ columns, rows, isLoading = false, skeletonRows = 6 }: DataTableProps) {
   const theme = useTheme();
 
   return (
@@ -46,7 +54,23 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Ar
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.length === 0 ? (
+          {isLoading ? (
+            Array.from({ length: skeletonRows }).map((_, rowIndex) => (
+              <TableRow key={`skeleton-${rowIndex}`}>
+                {columns.map((_, colIndex) => (
+                  <TableCell key={colIndex} sx={{ py: 1.5, px: 2 }}>
+                    <Skeleton
+                      variant="text"
+                      animation="wave"
+                      width={colIndex === 0 ? "60%" : colIndex === columns.length - 1 ? "40%" : "80%"}
+                      height={22}
+                      sx={{ borderRadius: 1 }}
+                    />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : rows.length === 0 ? (
             <TableRow>
               <TableCell colSpan={columns.length} align="center" sx={{ py: 6, color: "text.secondary" }}>
                 No records found.

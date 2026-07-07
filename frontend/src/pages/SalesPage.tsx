@@ -395,6 +395,7 @@ export function SalesPage() {
 
       {/* Data Table */}
       <DataTable
+        isLoading={sales.isLoading}
         columns={["Sipariş No", "Müşteri", "Toplam Tutar", "İndirim", "Net Tutar", "Tarih"]}
         rows={(sales.data?.items ?? []).map((s) => [
           <Typography variant="body2" fontWeight={700} color="primary.main">{s.saleNo}</Typography>,

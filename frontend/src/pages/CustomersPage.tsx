@@ -32,6 +32,7 @@ import { CustomerDto } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import {
   Paper as MuiPaper,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -48,9 +49,10 @@ interface CustomerTableProps {
   onEdit: (customer: CustomerDto) => void;
   onDelete: (customer: CustomerDto) => void;
   canManage?: boolean;
+  isLoading?: boolean;
 }
 
-function CustomerTable({ customers, onEdit, onDelete, canManage = true }: CustomerTableProps) {
+function CustomerTable({ customers, onEdit, onDelete, canManage = true, isLoading = false }: CustomerTableProps) {
   const theme = useTheme();
 
   return (
@@ -93,7 +95,16 @@ function CustomerTable({ customers, onEdit, onDelete, canManage = true }: Custom
           </TableRow>
         </TableHead>
         <TableBody>
-          {customers.length === 0 ? (
+          {isLoading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={`skel-${i}`}>
+                <TableCell sx={{ py: 1.5, px: 2 }}><Skeleton variant="text" width="70%" height={20} animation="wave" /></TableCell>
+                <TableCell sx={{ py: 1.5, px: 2 }}><Skeleton variant="text" width="80%" height={20} animation="wave" /></TableCell>
+                <TableCell sx={{ py: 1.5, px: 2 }}><Skeleton variant="rounded" width={90} height={24} animation="wave" sx={{ borderRadius: 4 }} /></TableCell>
+                {canManage && <TableCell sx={{ py: 1, px: 2 }}><Skeleton variant="rounded" width={64} height={32} animation="wave" sx={{ borderRadius: 1.5, ml: "auto", mr: "auto" }} /></TableCell>}
+              </TableRow>
+            ))
+          ) : customers.length === 0 ? (
             <TableRow>
               <TableCell
                 colSpan={canManage ? 4 : 3}
@@ -400,6 +411,7 @@ export function CustomersPage() {
         onEdit={openEdit}
         onDelete={openDelete}
         canManage={canManage}
+        isLoading={customersQuery.isLoading}
       />
 
       {/* ── Edit Dialog ───────────────────────────────────────────────────── */}

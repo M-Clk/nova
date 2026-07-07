@@ -558,6 +558,7 @@ export function ProductsPage() {
 
       {/* Data Table */}
       <DataTable
+        isLoading={products.isLoading}
         columns={canManage ? ["Kod", "Barkod", "Ürün Adı", "Marka", "Kategori", "Birim", "Satış Fiyatı", "Durum", "İşlemler"] : ["Kod", "Barkod", "Ürün Adı", "Marka", "Kategori", "Birim", "Satış Fiyatı", "Durum"]}
         rows={(products.data?.items ?? []).map((p) => {
           const row = [
