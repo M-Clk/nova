@@ -1,0 +1,5 @@
+{
+  "version": "1.1.0",
+  "releaseNotes": "Uzaktan güncelleme altyapısı ve Docker Hub entegrasyonu başarıyla kuruldu. Bu sürüm sistem kararlılık iyileştirmelerini içermektedir.",
+  "releaseDate": "2026-07-07"
+}
