@@ -56,7 +56,7 @@ public class SystemController(
 
         // Fallback update URL if not configured in appsettings
         var updateUrl = configuration["UpdateCheckUrl"] 
-                        ?? "https://raw.githubusercontent.com/mclk2148/nova-releases/main/version.json";
+                        ?? "https://raw.githubusercontent.com/M-Clk/nova/main/version.json";
 
         try
         {
