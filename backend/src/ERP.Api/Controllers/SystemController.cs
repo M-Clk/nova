@@ -55,8 +55,8 @@ public class SystemController(
         var currentVersion = Version.TryParse(currentVersionStr, out var parsedCurrent) ? parsedCurrent : new Version(1, 0, 0);
 
         // Fallback update URL if not configured in appsettings
-        var updateUrl = configuration["UpdateCheckUrl"] 
-                        ?? "https://raw.githubusercontent.com/M-Clk/nova/main/version.json";
+        var updateUrl = configuration["UpdateCheckUrl"]
+                        ?? "https://raw.githubusercontent.com/M-Clk/nova/master/version.json";
 
         try
         {
