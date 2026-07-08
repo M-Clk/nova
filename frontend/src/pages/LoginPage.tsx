@@ -284,7 +284,7 @@ export function LoginPage() {
           variant="contained"
           fullWidth
           size="large"
-          disabled={loading || !username.trim() || !password.trim()}
+          disabled={loading}
           sx={{
             borderRadius: 3,
             py: 1.6,
