@@ -1,5 +1,5 @@
 {
-  "version": "1.1.15",
-  "releaseNotes": "Login butonu disabled gorunmesi hatasi giderildi.",
-  "releaseDate": "2026-07-08"
+  "version": "1.2.0",
+  "releaseNotes": "Loglama altyapisi eklendi. ",
+  "releaseDate": "2026-07-09"
 }
