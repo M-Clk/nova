@@ -190,13 +190,15 @@ public class SystemController(
             // 4. Güncelleme öncesi otomatik DB Yedekleme adımı
             await BackupDatabaseAsync(logs);
 
+            var projectName = configuration["Update:ProjectName"] ?? "nova";
+
             logs.Add("[1/2] Güncel Docker imajları indiriliyor...");
-            var (pullCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" pull", logs);
+            var (pullCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" -p {projectName} pull", logs);
             if (pullCode != 0)
                 return StatusCode(500, new { success = false, logs, error = "docker compose pull başarısız." });
 
             logs.Add("[2/2] Konteynerler güncelleniyor...");
-            var (upCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" up -d --remove-orphans", logs);
+            var (upCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" -p {projectName} up -d --remove-orphans", logs);
             if (upCode != 0)
                 return StatusCode(500, new { success = false, logs, error = "docker compose up başarısız." });
 
