@@ -79,9 +79,9 @@ import {
 
 function RoleChip({ role }: { role: string }) {
   const map: Record<string, { label: string; color: "error" | "warning" | "info"; icon: React.ReactNode }> = {
-    Admin:   { label: "Admin",    color: "error",   icon: <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 13 }} /> },
+    Admin: { label: "Admin", color: "error", icon: <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 13 }} /> },
     Manager: { label: "Yönetici", color: "warning", icon: <ManageAccountsOutlinedIcon sx={{ fontSize: 13 }} /> },
-    Staff:   { label: "Personel", color: "info",    icon: <BadgeOutlinedIcon sx={{ fontSize: 13 }} /> }
+    Staff: { label: "Personel", color: "info", icon: <BadgeOutlinedIcon sx={{ fontSize: 13 }} /> }
   };
   const cfg = map[role] ?? map["Staff"];
   return (
@@ -1239,10 +1239,10 @@ function LicenseTabContent() {
               {isLicenseValid ? "Sistem Aktif ve Lisanslı" : "Lisans Geçersiz / Süresi Dolmuş"}
             </Typography>
           </Box>
-          <Chip 
-            label={isLicenseValid ? "Aktif" : "Geçersiz"} 
-            color={isLicenseValid ? "success" : "error"} 
-            size="small" 
+          <Chip
+            label={isLicenseValid ? "Aktif" : "Geçersiz"}
+            color={isLicenseValid ? "success" : "error"}
+            size="small"
             sx={{ fontWeight: 700 }}
           />
         </Stack>
@@ -1525,7 +1525,7 @@ function SystemTabContent() {
                 </>
               ) : (
                 <Alert severity="success" sx={{ borderRadius: 2 }}>
-                  Sisteminiz güncel. ({updateInfo.latestVersion ?? updateInfo.currentVersion}) Herhangi bir güncelleme işlemi gerekmiyor.
+                  Sisteminiz güncel.
                 </Alert>
               )}
             </Stack>
@@ -1688,62 +1688,62 @@ export function SettingsPage() {
 
   const tabsConfig = useMemo(() => {
     const list = [
-      { 
-        label: "Profil", 
-        icon: <PersonOutlinedIcon fontSize="small" />, 
-        component: <SettingsSection title="Profil Bilgileri" icon={<PersonOutlinedIcon fontSize="small" />}><ProfileTabContent /></SettingsSection> 
+      {
+        label: "Profil",
+        icon: <PersonOutlinedIcon fontSize="small" />,
+        component: <SettingsSection title="Profil Bilgileri" icon={<PersonOutlinedIcon fontSize="small" />}><ProfileTabContent /></SettingsSection>
       },
-      { 
-        label: "Görünüm", 
-        icon: <PaletteOutlinedIcon fontSize="small" />, 
-        component: <SettingsSection title="Görünüm" icon={<PaletteOutlinedIcon fontSize="small" />}><AppearanceTabContent /></SettingsSection> 
+      {
+        label: "Görünüm",
+        icon: <PaletteOutlinedIcon fontSize="small" />,
+        component: <SettingsSection title="Görünüm" icon={<PaletteOutlinedIcon fontSize="small" />}><AppearanceTabContent /></SettingsSection>
       }
     ];
 
     if (user?.role === "Admin") {
       list.push(
-        { 
-          label: "Depolar", 
-          icon: <BusinessOutlinedIcon fontSize="small" />, 
-          component: <SettingsSection title="Depolar" icon={<BusinessOutlinedIcon fontSize="small" />}><WarehousesTab /></SettingsSection> 
+        {
+          label: "Depolar",
+          icon: <BusinessOutlinedIcon fontSize="small" />,
+          component: <SettingsSection title="Depolar" icon={<BusinessOutlinedIcon fontSize="small" />}><WarehousesTab /></SettingsSection>
         },
-        { 
-          label: "Kasalar", 
-          icon: <PointOfSaleOutlinedIcon fontSize="small" />, 
-          component: <SettingsSection title="Kasalar" icon={<PointOfSaleOutlinedIcon fontSize="small" />}><TerminalsTab /></SettingsSection> 
+        {
+          label: "Kasalar",
+          icon: <PointOfSaleOutlinedIcon fontSize="small" />,
+          component: <SettingsSection title="Kasalar" icon={<PointOfSaleOutlinedIcon fontSize="small" />}><TerminalsTab /></SettingsSection>
         },
-        { 
-          label: "Lisans", 
-          icon: <KeyIcon fontSize="small" />, 
-          component: <SettingsSection title="Lisans Bilgileri" icon={<KeyIcon fontSize="small" />}><LicenseTabContent /></SettingsSection> 
+        {
+          label: "Lisans",
+          icon: <KeyIcon fontSize="small" />,
+          component: <SettingsSection title="Lisans Bilgileri" icon={<KeyIcon fontSize="small" />}><LicenseTabContent /></SettingsSection>
         }
       );
 
       list.push(
-        { 
-          label: "Sistem Güncelleme", 
-          icon: <SystemUpdateAltIcon fontSize="small" />, 
-          component: <SettingsSection title="Sistem Bilgileri ve Güncelleme" icon={<DnsOutlinedIcon fontSize="small" />}><SystemTabContent /></SettingsSection> 
+        {
+          label: "Sistem Güncelleme",
+          icon: <SystemUpdateAltIcon fontSize="small" />,
+          component: <SettingsSection title="Sistem Bilgileri ve Güncelleme" icon={<DnsOutlinedIcon fontSize="small" />}><SystemTabContent /></SettingsSection>
         }
       );
     }
 
     if (user?.role === "Admin" || user?.role === "Manager") {
       list.push(
-        { 
-          label: "Kategoriler", 
-          icon: <CategoryOutlinedIcon fontSize="small" />, 
-          component: <SettingsSection title="Kategoriler" icon={<CategoryOutlinedIcon fontSize="small" />}><CategoriesTab /></SettingsSection> 
+        {
+          label: "Kategoriler",
+          icon: <CategoryOutlinedIcon fontSize="small" />,
+          component: <SettingsSection title="Kategoriler" icon={<CategoryOutlinedIcon fontSize="small" />}><CategoriesTab /></SettingsSection>
         },
-        { 
-          label: "Markalar", 
-          icon: <StarOutlineIcon fontSize="small" />, 
-          component: <SettingsSection title="Markalar" icon={<StarOutlineIcon fontSize="small" />}><BrandsTab /></SettingsSection> 
+        {
+          label: "Markalar",
+          icon: <StarOutlineIcon fontSize="small" />,
+          component: <SettingsSection title="Markalar" icon={<StarOutlineIcon fontSize="small" />}><BrandsTab /></SettingsSection>
         },
-        { 
-          label: "Ölçü Birimleri", 
-          icon: <Inventory2OutlinedIcon fontSize="small" />, 
-          component: <SettingsSection title="Ölçü Birimleri" icon={<Inventory2OutlinedIcon fontSize="small" />}><UnitsTab /></SettingsSection> 
+        {
+          label: "Ölçü Birimleri",
+          icon: <Inventory2OutlinedIcon fontSize="small" />,
+          component: <SettingsSection title="Ölçü Birimleri" icon={<Inventory2OutlinedIcon fontSize="small" />}><UnitsTab /></SettingsSection>
         }
       );
     }
