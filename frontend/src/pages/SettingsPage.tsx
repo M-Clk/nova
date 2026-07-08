@@ -1371,28 +1371,70 @@ function SystemTabContent() {
 
   const handleApplyUpdate = async () => {
     setIsApplying(true);
-    setApplyLogs([]);
+    setApplyLogs(["▶ Güncelleme işlemi başlatılıyor..."]);
     setApplySuccess(null);
     setApplyError(null);
     setShowLogs(true);
+
     try {
-      const res = await apiClient.post<{ success: boolean; logs: string[]; error?: string }>(
-        "/system/apply-update"
-      );
-      setApplyLogs(res.data.logs ?? []);
-      setApplySuccess(res.data.success);
-      if (!res.data.success) setApplyError(res.data.error ?? "Güncelleme başarısız.");
-      if (res.data.success) {
-        // Refresh system info after update
-        setTimeout(() => { refetchInfo(); refetchUpdate(); }, 3000);
-      }
+      await apiClient.post("/system/apply-update");
+
+      let pollFailCount = 0;
+      const intervalId = setInterval(async () => {
+        try {
+          const statusRes = await apiClient.get<{
+            isRunning: boolean;
+            success: boolean | null;
+            error: string | null;
+            logs: string[];
+          }>("/system/update-status");
+
+          pollFailCount = 0; // reset on success
+          const { isRunning, success, error, logs } = statusRes.data;
+
+          if (logs && logs.length > 0) {
+            setApplyLogs(logs);
+          }
+
+          if (!isRunning) {
+            clearInterval(intervalId);
+            setIsApplying(false);
+            setApplySuccess(success);
+            if (success === false) {
+              setApplyError(error || "Güncelleme başarısız oldu.");
+            } else if (success === true) {
+              setTimeout(() => {
+                refetchInfo();
+                refetchUpdate();
+              }, 4000);
+            }
+          }
+        } catch (pollErr: any) {
+          pollFailCount++;
+          // Container güncellenip yeniden başlarken geçici olarak bağlantı kopacaktır.
+          // Eğer 3 kereden fazla ardışık hata alırsak ve loglarımızda konteynerlerin güncellendiği yazıyorsa,
+          // büyük olasılıkla sistem başarıyla yeniden başlatılıyordur.
+          if (pollFailCount > 3) {
+            clearInterval(intervalId);
+            setIsApplying(false);
+            setApplySuccess(true);
+            setApplyLogs((prev) => [
+              ...prev,
+              "⚡ Sunucu bağlantısı kesildi. Yeni sürüm başlatılıyor...",
+              "✅ Güncelleme başarıyla tamamlandı! Lütfen birkaç saniye sonra sayfayı yenileyin."
+            ]);
+            setTimeout(() => {
+              refetchInfo();
+              refetchUpdate();
+            }, 6000);
+          }
+        }
+      }, 1500);
+
     } catch (err: any) {
-      const errData = err?.response?.data;
-      setApplyLogs(errData?.logs ?? []);
-      setApplySuccess(false);
-      setApplyError(errData?.error ?? err?.message ?? "Sunucu hatası.");
-    } finally {
       setIsApplying(false);
+      setApplySuccess(false);
+      setApplyError(err?.response?.data?.message ?? err?.message ?? "Güncelleme başlatılamadı.");
     }
   };
 

@@ -25,6 +25,11 @@ public class SystemController(
 {
     private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(5) };
 
+    private static readonly List<string> UpdateLogs = new();
+    private static bool IsUpdateRunning = false;
+    private static bool? IsUpdateSuccess = null;
+    private static string? UpdateError = null;
+
     [HttpGet("info")]
     public async Task<IActionResult> GetSystemInfo()
     {
@@ -103,114 +108,215 @@ public class SystemController(
         }
     }
 
+    [HttpGet("update-status")]
+    [Authorize(Roles = "Admin")]
+    public IActionResult GetUpdateStatus()
+    {
+        lock (UpdateLogs)
+        {
+            return Ok(new
+            {
+                isRunning = IsUpdateRunning,
+                success = IsUpdateSuccess,
+                error = UpdateError,
+                logs = new List<string>(UpdateLogs)
+            });
+        }
+    }
+
     [HttpPost("apply-update")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> ApplyUpdate()
+    public IActionResult ApplyUpdate()
     {
-        var logs = new List<string>();
-
-        try
+        lock (UpdateLogs)
         {
-            // 1. Config'den yol okuma (öncelikli)
-            var configScriptPath = configuration["Update:UpdateScriptPath"];
-            var configComposePath = configuration["Update:ComposeFilePath"];
-
-            // 2. Script varsa çalıştır (sadece uygun işletim sisteminde)
-            string? scriptPath = null;
-            if (!string.IsNullOrWhiteSpace(configScriptPath) && System.IO.File.Exists(configScriptPath))
+            if (IsUpdateRunning)
             {
-                var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-                var isPs1 = configScriptPath.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase);
-                if (isWindows || !isPs1)
+                return BadRequest(new { message = "Zaten aktif bir güncelleme işlemi çalışıyor." });
+            }
+
+            IsUpdateRunning = true;
+            IsUpdateSuccess = null;
+            UpdateError = null;
+            UpdateLogs.Clear();
+            UpdateLogs.Add("▶ Güncelleme işlemi arka planda başlatıldı...");
+        }
+
+        // 504 Gateway Timeout'u önlemek için işlemi arka plan iş parçacığına taşıyoruz
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // 1. Config'den yol okuma (öncelikli)
+                var configScriptPath = configuration["Update:UpdateScriptPath"];
+                var configComposePath = configuration["Update:ComposeFilePath"];
+
+                // 2. Script varsa çalıştır (sadece uygun işletim sisteminde)
+                string? scriptPath = null;
+                if (!string.IsNullOrWhiteSpace(configScriptPath) && System.IO.File.Exists(configScriptPath))
                 {
-                    scriptPath = configScriptPath;
-                    logs.Add($"▶ Yapılandırılmış güncelleme betiği kullanılıyor: {scriptPath}");
+                    var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+                    var isPs1 = configScriptPath.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase);
+                    if (isWindows || !isPs1)
+                    {
+                        scriptPath = configScriptPath;
+                        lock (UpdateLogs) UpdateLogs.Add($"▶ Yapılandırılmış güncelleme betiği kullanılıyor: {scriptPath}");
+                    }
+                    else
+                    {
+                        lock (UpdateLogs) UpdateLogs.Add("⚠ Linux container icinde .ps1 betigi calistirilamaz. Docker Compose entegrasyonu kullanilacak.");
+                    }
                 }
                 else
                 {
-                    logs.Add("⚠ Linux container icinde .ps1 betigi calistirilamaz. Docker Compose entegrasyonu kullanilacak.");
-                }
-            }
-            else
-            {
-                // Fallback: sadece Windows host üzerinde çalışıyorsak yerel .ps1 aranabilir
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    var appBase = AppContext.BaseDirectory;
-                    var scriptsDir = FindScriptsDirectory(appBase);
-                    if (scriptsDir != null)
+                    // Fallback: sadece Windows host üzerinde çalışıyorsak yerel .ps1 aranabilir
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                     {
-                        var candidate = Path.Combine(scriptsDir, "update-nova.ps1");
-                        if (System.IO.File.Exists(candidate))
+                        var appBase = AppContext.BaseDirectory;
+                        var scriptsDir = FindScriptsDirectory(appBase);
+                        if (scriptsDir != null)
                         {
-                            scriptPath = candidate;
-                            logs.Add($"▶ Güncelleme betiği bulundu: {scriptPath}");
+                            var candidate = Path.Combine(scriptsDir, "update-nova.ps1");
+                            if (System.IO.File.Exists(candidate))
+                            {
+                                scriptPath = candidate;
+                                lock (UpdateLogs) UpdateLogs.Add($"▶ Güncelleme betiği bulundu: {scriptPath}");
+                            }
                         }
                     }
                 }
-            }
 
-            if (scriptPath != null)
+                if (scriptPath != null)
+                {
+                    var scriptLogs = new List<string>();
+                    var (exitCode, _) = await RunProcessAsync(
+                        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell" : "pwsh",
+                        $"-ExecutionPolicy Bypass -File \"{scriptPath}\"",
+                        scriptLogs);
+
+                    lock (UpdateLogs)
+                    {
+                        UpdateLogs.AddRange(scriptLogs);
+                    }
+
+                    if (exitCode != 0)
+                    {
+                        lock (UpdateLogs)
+                        {
+                            IsUpdateRunning = false;
+                            IsUpdateSuccess = false;
+                            UpdateError = "Güncelleme betiği hata ile sonlandı.";
+                        }
+                        return;
+                    }
+
+                    lock (UpdateLogs)
+                    {
+                        UpdateLogs.Add("✅ Güncelleme başarıyla tamamlandı!");
+                        IsUpdateRunning = false;
+                        IsUpdateSuccess = true;
+                    }
+                    return;
+                }
+
+                // 3. Compose dosyası ile docker compose komutu
+                string? composeFile = null;
+                if (!string.IsNullOrWhiteSpace(configComposePath) && System.IO.File.Exists(configComposePath))
+                {
+                    composeFile = configComposePath;
+                    lock (UpdateLogs) UpdateLogs.Add($"▶ Yapılandırılmış Compose dosyası kullanılıyor: {Path.GetFileName(composeFile)}");
+                }
+                else
+                {
+                    // Fallback: dizin taraması
+                    composeFile = FindComposeFile(AppContext.BaseDirectory);
+                    if (composeFile != null)
+                        lock (UpdateLogs) UpdateLogs.Add($"▶ Docker Compose dosyası bulundu: {Path.GetFileName(composeFile)}");
+                }
+
+                if (composeFile == null)
+                {
+                    lock (UpdateLogs)
+                    {
+                        UpdateLogs.Add("⚠ docker-compose.yml bulunamadı.");
+                        UpdateLogs.Add("  → Çözüm: docker-compose ortamında aşağıdaki environment variable'ı tanımlayın:");
+                        UpdateLogs.Add("    Update__ComposeFilePath=/host/path/to/docker-compose.prod.yml");
+                        IsUpdateRunning = false;
+                        IsUpdateSuccess = false;
+                        UpdateError = "Compose dosyası bulunamadı.";
+                    }
+                    return;
+                }
+
+                // 4. Güncelleme öncesi otomatik DB Yedekleme adımı
+                var backupLogs = new List<string>();
+                await BackupDatabaseAsync(backupLogs);
+                lock (UpdateLogs)
+                {
+                    UpdateLogs.AddRange(backupLogs);
+                }
+
+                var projectName = configuration["Update:ProjectName"] ?? "nova";
+
+                lock (UpdateLogs) UpdateLogs.Add("[1/2] Güncel Docker imajları indiriliyor...");
+                var pullLogs = new List<string>();
+                var (pullCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" -p {projectName} pull", pullLogs);
+                lock (UpdateLogs)
+                {
+                    UpdateLogs.AddRange(pullLogs);
+                }
+
+                if (pullCode != 0)
+                {
+                    lock (UpdateLogs)
+                    {
+                        IsUpdateRunning = false;
+                        IsUpdateSuccess = false;
+                        UpdateError = "docker compose pull başarısız.";
+                    }
+                    return;
+                }
+
+                lock (UpdateLogs) UpdateLogs.Add("[2/2] Konteynerler güncelleniyor...");
+                var upLogs = new List<string>();
+                var (upCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" -p {projectName} up -d --remove-orphans", upLogs);
+                lock (UpdateLogs)
+                {
+                    UpdateLogs.AddRange(upLogs);
+                }
+
+                if (upCode != 0)
+                {
+                    lock (UpdateLogs)
+                    {
+                        IsUpdateRunning = false;
+                        IsUpdateSuccess = false;
+                        UpdateError = "docker compose up başarısız.";
+                    }
+                    return;
+                }
+
+                lock (UpdateLogs)
+                {
+                    UpdateLogs.Add("✅ Güncelleme başarıyla tamamlandı!");
+                    IsUpdateRunning = false;
+                    IsUpdateSuccess = true;
+                }
+            }
+            catch (Exception ex)
             {
-                var (exitCode, _) = await RunProcessAsync(
-                    RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell" : "pwsh",
-                    $"-ExecutionPolicy Bypass -File \"{scriptPath}\"",
-                    logs);
-
-                if (exitCode != 0)
-                    return StatusCode(500, new { success = false, logs, error = "Güncelleme betiği hata ile sonlandı." });
-
-                logs.Add("✅ Güncelleme başarıyla tamamlandı!");
-                return Ok(new { success = true, logs });
+                logger.LogError(ex, "Background update failed");
+                lock (UpdateLogs)
+                {
+                    IsUpdateRunning = false;
+                    IsUpdateSuccess = false;
+                    UpdateError = ex.Message;
+                    UpdateLogs.Add($"❌ Hata: {ex.Message}");
+                }
             }
+        });
 
-            // 3. Compose dosyası ile docker compose komutu
-            string? composeFile = null;
-            if (!string.IsNullOrWhiteSpace(configComposePath) && System.IO.File.Exists(configComposePath))
-            {
-                composeFile = configComposePath;
-                logs.Add($"▶ Yapılandırılmış Compose dosyası kullanılıyor: {Path.GetFileName(composeFile)}");
-            }
-            else
-            {
-                // Fallback: dizin taraması
-                composeFile = FindComposeFile(AppContext.BaseDirectory);
-                if (composeFile != null)
-                    logs.Add($"▶ Docker Compose dosyası bulundu: {Path.GetFileName(composeFile)}");
-            }
-
-            if (composeFile == null)
-            {
-                logs.Add("⚠ docker-compose.yml bulunamadı.");
-                logs.Add("  → Çözüm: docker-compose ortamında aşağıdaki environment variable'ı tanımlayın:");
-                logs.Add("    Update__ComposeFilePath=/host/path/to/docker-compose.prod.yml");
-                return StatusCode(500, new { success = false, logs, error = "Compose dosyası bulunamadı. Lütfen 'Update__ComposeFilePath' ortam değişkenini ayarlayın." });
-            }
-
-            // 4. Güncelleme öncesi otomatik DB Yedekleme adımı
-            await BackupDatabaseAsync(logs);
-
-            var projectName = configuration["Update:ProjectName"] ?? "nova";
-
-            logs.Add("[1/2] Güncel Docker imajları indiriliyor...");
-            var (pullCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" -p {projectName} pull", logs);
-            if (pullCode != 0)
-                return StatusCode(500, new { success = false, logs, error = "docker compose pull başarısız." });
-
-            logs.Add("[2/2] Konteynerler güncelleniyor...");
-            var (upCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" -p {projectName} up -d --remove-orphans", logs);
-            if (upCode != 0)
-                return StatusCode(500, new { success = false, logs, error = "docker compose up başarısız." });
-
-            logs.Add("✅ Güncelleme başarıyla tamamlandı!");
-            return Ok(new { success = true, logs });
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Apply update failed");
-            logs.Add($"❌ Hata: {ex.Message}");
-            return StatusCode(500, new { success = false, logs, error = ex.Message });
-        }
+        return Ok(new { success = true, message = "Güncelleme arka planda başlatıldı." });
     }
 
     private async Task BackupDatabaseAsync(List<string> logs)

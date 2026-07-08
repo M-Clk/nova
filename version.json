@@ -1,5 +1,5 @@
 {
-  "version": "1.1.10",
-  "releaseNotes": "Arayuz uzerinden otomatik guncelleme test asamasi (1.1.10).",
+  "version": "1.1.11",
+  "releaseNotes": "Guncelleme sirasindaki 504 Gateway Timeout hatasini onlemek icin background updater ve polling yapisi eklendi.",
   "releaseDate": "2026-07-08"
 }
