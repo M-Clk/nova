@@ -1,7 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using ERP.Application.Abstractions;
 using Microsoft.AspNetCore.Authorization;
@@ -24,7 +28,7 @@ public class SystemController(
     [HttpGet("info")]
     public async Task<IActionResult> GetSystemInfo()
     {
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
         bool dbConnected = false;
         try
         {
@@ -51,7 +55,7 @@ public class SystemController(
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> CheckForUpdates()
     {
-        var currentVersionStr = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+        var currentVersionStr = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
         var currentVersion = Version.TryParse(currentVersionStr, out var parsedCurrent) ? parsedCurrent : new Version(1, 0, 0);
 
         // Fallback update URL if not configured in appsettings
@@ -97,6 +101,132 @@ public class SystemController(
                 message = "Güncelleme sunucusuna erişilemedi. İnternet bağlantınızı kontrol edin."
             });
         }
+    }
+
+    [HttpPost("apply-update")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ApplyUpdate()
+    {
+        var logs = new List<string>();
+
+        try
+        {
+            var appBase = AppContext.BaseDirectory;
+            var scriptsDir = FindScriptsDirectory(appBase);
+            var composeFile = FindComposeFile(appBase);
+
+            if (scriptsDir != null)
+            {
+                var scriptPath = Path.Combine(scriptsDir, "update-nova.ps1");
+                if (System.IO.File.Exists(scriptPath))
+                {
+                    logs.Add("▶ Güncelleme betiği bulundu, çalıştırılıyor...");
+                    var (exitCode, _) = await RunProcessAsync(
+                        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell" : "pwsh",
+                        $"-ExecutionPolicy Bypass -File \"{scriptPath}\"",
+                        logs);
+
+                    if (exitCode != 0)
+                        return StatusCode(500, new { success = false, logs, error = "Güncelleme betiği hata ile sonlandı." });
+
+                    logs.Add("✅ Güncelleme başarıyla tamamlandı!");
+                    return Ok(new { success = true, logs });
+                }
+            }
+
+            if (composeFile == null)
+            {
+                logs.Add("⚠ docker-compose.yml bulunamadı.");
+                return StatusCode(500, new { success = false, logs, error = "Compose dosyası bulunamadı." });
+            }
+
+            logs.Add($"▶ Docker Compose: {Path.GetFileName(composeFile)}");
+
+            logs.Add("[1/2] Güncel Docker imajları indiriliyor...");
+            var (pullCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" pull", logs);
+            if (pullCode != 0)
+                return StatusCode(500, new { success = false, logs, error = "docker compose pull başarısız." });
+
+            logs.Add("[2/2] Konteynerler güncelleniyor...");
+            var (upCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" up -d --remove-orphans", logs);
+            if (upCode != 0)
+                return StatusCode(500, new { success = false, logs, error = "docker compose up başarısız." });
+
+            logs.Add("✅ Güncelleme başarıyla tamamlandı!");
+            return Ok(new { success = true, logs });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Apply update failed");
+            logs.Add($"❌ Hata: {ex.Message}");
+            return StatusCode(500, new { success = false, logs, error = ex.Message });
+        }
+    }
+
+    private static string? FindScriptsDirectory(string startDir)
+    {
+        var dir = startDir;
+        for (var i = 0; i < 8; i++)
+        {
+            var candidate = Path.Combine(dir, "scripts");
+            if (Directory.Exists(candidate)) return candidate;
+            var parent = Directory.GetParent(dir)?.FullName;
+            if (parent == null) break;
+            dir = parent;
+        }
+        return null;
+    }
+
+    private static string? FindComposeFile(string startDir)
+    {
+        var dir = startDir;
+        for (var i = 0; i < 8; i++)
+        {
+            foreach (var name in new[] { "docker-compose.prod.yml", "docker-compose.yml" })
+            {
+                var candidate = Path.Combine(dir, name);
+                if (System.IO.File.Exists(candidate)) return candidate;
+            }
+            var parent = Directory.GetParent(dir)?.FullName;
+            if (parent == null) break;
+            dir = parent;
+        }
+        return null;
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunProcessAsync(
+        string fileName, string arguments, List<string> logs)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        process.Start();
+
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+
+        await process.WaitForExitAsync();
+
+        var output = await outputTask;
+        var error = await errorTask;
+
+        if (!string.IsNullOrWhiteSpace(output))
+            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                logs.Add(line.TrimEnd());
+
+        if (!string.IsNullOrWhiteSpace(error))
+            foreach (var line in error.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                logs.Add($"⚠ {line.TrimEnd()}");
+
+        return (process.ExitCode, output);
     }
 }
 

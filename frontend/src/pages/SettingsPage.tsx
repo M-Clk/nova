@@ -1343,7 +1343,14 @@ interface UpdateCheckResponse {
 }
 
 function SystemTabContent() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "Admin";
   const [isCheckingManual, setIsCheckingManual] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyLogs, setApplyLogs] = useState<string[]>([]);
+  const [applySuccess, setApplySuccess] = useState<boolean | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [showLogs, setShowLogs] = useState(false);
 
   const { data: systemInfo, isLoading: isInfoLoading, refetch: refetchInfo } = useQuery<SystemInfoResponse>({
     queryKey: ["system-info"],
@@ -1353,13 +1360,40 @@ function SystemTabContent() {
   const { data: updateInfo, isLoading: isUpdateLoading, refetch: refetchUpdate } = useQuery<UpdateCheckResponse>({
     queryKey: ["system-update-check"],
     queryFn: async () => (await apiClient.get<UpdateCheckResponse>("/system/check-update")).data,
-    enabled: true
+    enabled: isAdmin
   });
 
   const handleCheckUpdates = async () => {
     setIsCheckingManual(true);
     await Promise.all([refetchInfo(), refetchUpdate()]);
     setIsCheckingManual(false);
+  };
+
+  const handleApplyUpdate = async () => {
+    setIsApplying(true);
+    setApplyLogs([]);
+    setApplySuccess(null);
+    setApplyError(null);
+    setShowLogs(true);
+    try {
+      const res = await apiClient.post<{ success: boolean; logs: string[]; error?: string }>(
+        "/system/apply-update"
+      );
+      setApplyLogs(res.data.logs ?? []);
+      setApplySuccess(res.data.success);
+      if (!res.data.success) setApplyError(res.data.error ?? "Güncelleme başarısız.");
+      if (res.data.success) {
+        // Refresh system info after update
+        setTimeout(() => { refetchInfo(); refetchUpdate(); }, 3000);
+      }
+    } catch (err: any) {
+      const errData = err?.response?.data;
+      setApplyLogs(errData?.logs ?? []);
+      setApplySuccess(false);
+      setApplyError(errData?.error ?? err?.message ?? "Sunucu hatası.");
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   const isChecking = isInfoLoading || isUpdateLoading || isCheckingManual;
@@ -1376,10 +1410,10 @@ function SystemTabContent() {
             </Typography>
           </Box>
           {!isChecking && (
-            <Chip 
-              label={systemInfo?.databaseConnected ? "Aktif" : "Hata"} 
-              color={systemInfo?.databaseConnected ? "success" : "error"} 
-              size="small" 
+            <Chip
+              label={systemInfo?.databaseConnected ? "Aktif" : "Hata"}
+              color={systemInfo?.databaseConnected ? "success" : "error"}
+              size="small"
               sx={{ fontWeight: 700 }}
             />
           )}
@@ -1412,8 +1446,12 @@ function SystemTabContent() {
         {/* Güncelleme Durumu */}
         <Box>
           <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Güncelleme Durumu</Typography>
-          
-          {isChecking ? (
+
+          {!isAdmin ? (
+            <Alert severity="info" sx={{ borderRadius: 2 }}>
+              Güncelleme kontrolü yalnızca sistem yöneticisi tarafından yapılabilir.
+            </Alert>
+          ) : isChecking ? (
             <Stack direction="row" alignItems="center" spacing={2} sx={{ py: 2 }}>
               <CircularProgress size={24} />
               <Typography variant="body2" color="text.secondary">Güncellemeler denetleniyor, lütfen bekleyin...</Typography>
@@ -1428,7 +1466,7 @@ function SystemTabContent() {
                       {updateInfo.message}
                     </Typography>
                   </Alert>
-                  
+
                   {updateInfo.releaseDate && (
                     <Box>
                       <Typography variant="body2" color="text.secondary">Yayınlanma Tarihi</Typography>
@@ -1445,13 +1483,49 @@ function SystemTabContent() {
                     </Box>
                   )}
 
-                  <Alert severity="info" sx={{ borderRadius: 2 }}>
-                    Güncellemeyi uygulamak için lütfen sunucu terminalinde <code>scripts/update-nova.ps1</code> komutunu çalıştırın. Bu işlem veri tabanınızı yedekler ve en son Docker imajlarını otomatik çeker.
-                  </Alert>
+                  {/* ── Apply Update Button ── */}
+                  <Box
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2,
+                      border: 2,
+                      borderColor: "warning.main",
+                      bgcolor: (theme) => theme.palette.mode === "dark"
+                        ? "rgba(251,191,36,0.07)"
+                        : "rgba(251,191,36,0.05)",
+                    }}
+                  >
+                    <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ sm: "center" }} justifyContent="space-between" spacing={2}>
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          🚀 Güncellemeyi Şimdi Uygula
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+                          Sistem yedeklenir, yeni Docker imajları çekilir ve servisler yeniden başlatılır.
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="contained"
+                        color="warning"
+                        startIcon={isApplying ? <CircularProgress size={16} color="inherit" /> : <SystemUpdateAltIcon />}
+                        onClick={handleApplyUpdate}
+                        disabled={isApplying}
+                        sx={{
+                          borderRadius: 2,
+                          textTransform: "none",
+                          fontWeight: 700,
+                          whiteSpace: "nowrap",
+                          minWidth: 180
+                        }}
+                      >
+                        {isApplying ? "Güncelleniyor..." : `v${updateInfo.latestVersion} Yükle`}
+                      </Button>
+                    </Stack>
+                  </Box>
                 </>
               ) : (
                 <Alert severity="success" sx={{ borderRadius: 2 }}>
-                  Sisteminiz güncel. Herhangi bir güncelleme işlemi gerekmiyor.
+                  Sisteminiz güncel. ({updateInfo.latestVersion ?? updateInfo.currentVersion}) Herhangi bir güncelleme işlemi gerekmiyor.
                 </Alert>
               )}
             </Stack>
@@ -1459,7 +1533,50 @@ function SystemTabContent() {
             <Typography variant="body2" color="text.secondary">Güncelleme bilgisi alınamadı.</Typography>
           )}
 
-          {!isChecking && (
+          {/* Apply Update Logs */}
+          {showLogs && (
+            <Box sx={{ mt: 2 }}>
+              {applySuccess === true && (
+                <Alert severity="success" sx={{ borderRadius: 2, mb: 1.5 }}>
+                  Güncelleme başarıyla uygulandı! Sistem yeniden başlatılıyor olabilir.
+                </Alert>
+              )}
+              {applySuccess === false && applyError && (
+                <Alert severity="error" sx={{ borderRadius: 2, mb: 1.5 }}>
+                  <strong>Hata:</strong> {applyError}
+                </Alert>
+              )}
+              {applyLogs.length > 0 && (
+                <Box
+                  sx={{
+                    bgcolor: (theme) => theme.palette.mode === "dark" ? "grey.900" : "grey.100",
+                    border: 1,
+                    borderColor: "divider",
+                    borderRadius: 2,
+                    p: 2,
+                    fontFamily: "monospace",
+                    fontSize: "0.78rem",
+                    maxHeight: 280,
+                    overflowY: "auto"
+                  }}
+                >
+                  {applyLogs.map((line, i) => (
+                    <Box key={i} sx={{ mb: 0.3, color: line.startsWith("✅") ? "success.main" : line.startsWith("❌") || line.startsWith("⚠") ? "error.main" : "text.primary" }}>
+                      {line}
+                    </Box>
+                  ))}
+                  {isApplying && (
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1, color: "text.secondary" }}>
+                      <CircularProgress size={12} />
+                      <span>İşlem devam ediyor...</span>
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </Box>
+          )}
+
+          {!isChecking && isAdmin && (
             <Button
               variant="outlined"
               size="small"
