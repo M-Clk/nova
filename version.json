@@ -1,5 +1,5 @@
 {
-  "version": "1.1.12",
-  "releaseNotes": "Guncelleme sirasindaki 504 Gateway Timeout hatasini onlemek icin background updater ve polling yapisi eklendi.",
+  "version": "1.1.13",
+  "releaseNotes": "Kendi kendini guncellerken olusan API kapanma sorunu gecici container yontemiyle giderildi.",
   "releaseDate": "2026-07-08"
 }
