@@ -1,5 +1,5 @@
 {
-  "version": "1.1.7",
-  "releaseNotes": "Linux container altinda otomatik veri tabani yedekleme ve guncelleme akisi iyilesitirildi.",
+  "version": "1.1.8",
+  "releaseNotes": "Arayuz uzerinden guncelleme test sürümü.",
   "releaseDate": "2026-07-08"
 }
