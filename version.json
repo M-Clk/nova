@@ -1,5 +1,5 @@
 {
-  "version": "1.1.9",
-  "releaseNotes": "Docker Compose proje adi çakışması (-p nova parametresi ile) giderildi.",
+  "version": "1.2.0",
+  "releaseNotes": "Arayuz uzerinden otomatik guncelleme test asamasi.",
   "releaseDate": "2026-07-08"
 }
