@@ -44,6 +44,9 @@ public static class DependencyInjection
         // License Service
         services.AddSingleton<ILicenseService, LicenseService>();
 
+        // System Log Cleanup Background Service
+        services.AddHostedService<LogCleanupBackgroundService>();
+
         return services;
     }
 }

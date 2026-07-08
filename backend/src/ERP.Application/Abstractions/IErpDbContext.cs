@@ -17,6 +17,7 @@ public interface IErpDbContext
     DbSet<User> Users { get; }
     DbSet<Warehouse> Warehouses { get; }
     DbSet<SystemSetting> SystemSettings { get; }
+    DbSet<SystemLog> SystemLogs { get; }
 
     Task<IErpTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

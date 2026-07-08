@@ -18,6 +18,7 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
     public DbSet<User> Users => Set<User>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+    public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
 
     public async Task<IErpTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
@@ -180,6 +181,21 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
             entity.Property(x => x.Key).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Value).IsRequired();
             entity.HasIndex(x => x.Key).IsUnique();
+        });
+
+        modelBuilder.Entity<SystemLog>(entity =>
+        {
+            entity.ToTable("system_logs");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(x => x.Message).HasColumnName("message");
+            entity.Property(x => x.MessageTemplate).HasColumnName("message_template");
+            entity.Property(x => x.Level).HasColumnName("level").HasMaxLength(128);
+            entity.Property(x => x.Timestamp).HasColumnName("timestamp");
+            entity.Property(x => x.Exception).HasColumnName("exception");
+            entity.Property(x => x.Properties).HasColumnName("properties");
+            entity.HasIndex(x => x.Timestamp);
+            entity.HasIndex(x => x.Level);
         });
     }
 }

@@ -275,3 +275,23 @@ export type LowStockItemDto = {
   stockRatio: number;
   alertLevel: string;
 };
+
+// ─── System Log Types ────────────────────────────────────────────────────────
+
+export type SystemLogDto = {
+  id: string;
+  message: string | null;
+  messageTemplate: string | null;
+  level: string | null;
+  timestamp: string;
+  exception: string | null;
+  properties: string | null;
+};
+
+export type PaginatedLogsDto = {
+  items: SystemLogDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};

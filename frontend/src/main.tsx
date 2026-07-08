@@ -42,6 +42,7 @@ import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import SupervisorAccountOutlinedIcon from "@mui/icons-material/SupervisorAccountOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import TerminalOutlinedIcon from "@mui/icons-material/TerminalOutlined";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProductsPage } from "./pages/ProductsPage";
@@ -54,6 +55,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/UsersPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { SystemLogsPage } from "./pages/SystemLogsPage";
 import { AppThemeProvider, useThemeMode } from "./theme/ThemeContext";
 import "./styles.css";
 
@@ -116,7 +118,10 @@ function NavigationContent({ onClose }: { onClose?: () => void }) {
     { to: "/warehouses", label: "Depolar", icon: <BusinessOutlinedIcon /> },
     { to: "/pos", label: "POS Kasası", icon: <PointOfSaleIcon /> },
     ...(user?.role === "Admin"
-      ? [{ to: "/users", label: "Personel", icon: <SupervisorAccountOutlinedIcon /> }]
+      ? [
+          { to: "/users", label: "Personel", icon: <SupervisorAccountOutlinedIcon /> },
+          { to: "/logs", label: "Sistem Logları", icon: <TerminalOutlinedIcon /> }
+        ]
       : []),
     { to: "/settings", label: "Ayarlar", icon: <SettingsOutlinedIcon /> }
   ];
@@ -273,6 +278,7 @@ function MainLayout() {
       case "/pos": return "POS Kasası";
       case "/reports": return "Raporlar";
       case "/users": return "Personel Yönetimi";
+      case "/logs": return "Sistem Logları";
       case "/settings": return "Ayarlar";
       default: return "Nova";
     }
@@ -369,6 +375,7 @@ function App() {
                     <Route path="pos" element={<POSPage />} />
                     <Route path="reports" element={<AllowedRolesRoute roles={["Admin", "Manager"]}><ReportsPage /></AllowedRolesRoute>} />
                     <Route path="users" element={<AllowedRolesRoute roles={["Admin"]}><UsersPage /></AllowedRolesRoute>} />
+                    <Route path="logs" element={<AllowedRolesRoute roles={["Admin"]}><SystemLogsPage /></AllowedRolesRoute>} />
                     <Route path="settings" element={<SettingsPage />} />
                   </Route>
                 </Route>
