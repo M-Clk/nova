@@ -3,9 +3,18 @@
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $BackupScript = Join-Path $ScriptDir "backup-db.ps1"
-$ProdCompose = Join-Path $ScriptDir "..\docker-compose.prod.yml"
-$DevCompose = Join-Path $ScriptDir "..\docker-compose.yml"
-$DockerComposeFile = if (Test-Path $ProdCompose) { $ProdCompose } else { $DevCompose }
+$RepoRoot = Split-Path -Parent $ScriptDir
+
+# Öncelik sırası: prod > windows > dev
+$ComposeFile = $null
+foreach ($name in @("docker-compose.prod.yml", "docker-compose.windows.yml", "docker-compose.yml")) {
+    $candidate = Join-Path $RepoRoot $name
+    if (Test-Path $candidate) { $ComposeFile = $candidate; break }
+}
+if (-not $ComposeFile) {
+    Write-Error "HATA: Hiçbir docker-compose dosyası bulunamadı!"
+    exit 1
+}
 
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host "         Nova ERP Güncelleme Sihirbazı        " -ForegroundColor Cyan
@@ -29,7 +38,7 @@ Write-Host "[2/3] Güncel Docker imajları indiriliyor..." -ForegroundColor Yell
 
 # 2. Pull latest images
 # Note: If using private registry, ensure 'docker login' was performed on the host beforehand.
-docker compose -f $DockerComposeFile pull
+docker compose -f $ComposeFile pull
 if ($LASTEXITCODE -ne 0) {
     Write-Error "HATA: Docker imajları indirilemedi! İnternet bağlantınızı veya registry giriş bilgilerinizi kontrol edin."
     exit 1
@@ -39,7 +48,7 @@ Write-Host ""
 Write-Host "[3/3] Konteynerler güncelleniyor ve yeniden başlatılıyor..." -ForegroundColor Yellow
 
 # 3. Re-launch compose with the new images
-docker compose -f $DockerComposeFile up -d --remove-orphans
+docker compose -f $ComposeFile up -d --remove-orphans
 if ($LASTEXITCODE -ne 0) {
     Write-Error "HATA: Servisler başlatılamadı!"
     exit 1

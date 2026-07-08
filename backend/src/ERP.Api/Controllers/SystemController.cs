@@ -111,36 +111,69 @@ public class SystemController(
 
         try
         {
-            var appBase = AppContext.BaseDirectory;
-            var scriptsDir = FindScriptsDirectory(appBase);
-            var composeFile = FindComposeFile(appBase);
+            // 1. Config'den yol okuma (öncelikli)
+            var configScriptPath = configuration["Update:UpdateScriptPath"];
+            var configComposePath = configuration["Update:ComposeFilePath"];
 
-            if (scriptsDir != null)
+            // 2. Script varsa çalıştır
+            string? scriptPath = null;
+            if (!string.IsNullOrWhiteSpace(configScriptPath) && System.IO.File.Exists(configScriptPath))
             {
-                var scriptPath = Path.Combine(scriptsDir, "update-nova.ps1");
-                if (System.IO.File.Exists(scriptPath))
+                scriptPath = configScriptPath;
+                logs.Add($"▶ Yapılandırılmış güncelleme betiği kullanılıyor: {scriptPath}");
+            }
+            else
+            {
+                // Fallback: dizin taraması
+                var appBase = AppContext.BaseDirectory;
+                var scriptsDir = FindScriptsDirectory(appBase);
+                if (scriptsDir != null)
                 {
-                    logs.Add("▶ Güncelleme betiği bulundu, çalıştırılıyor...");
-                    var (exitCode, _) = await RunProcessAsync(
-                        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell" : "pwsh",
-                        $"-ExecutionPolicy Bypass -File \"{scriptPath}\"",
-                        logs);
-
-                    if (exitCode != 0)
-                        return StatusCode(500, new { success = false, logs, error = "Güncelleme betiği hata ile sonlandı." });
-
-                    logs.Add("✅ Güncelleme başarıyla tamamlandı!");
-                    return Ok(new { success = true, logs });
+                    var candidate = Path.Combine(scriptsDir, "update-nova.ps1");
+                    if (System.IO.File.Exists(candidate))
+                    {
+                        scriptPath = candidate;
+                        logs.Add($"▶ Güncelleme betiği bulundu: {scriptPath}");
+                    }
                 }
+            }
+
+            if (scriptPath != null)
+            {
+                var (exitCode, _) = await RunProcessAsync(
+                    RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell" : "pwsh",
+                    $"-ExecutionPolicy Bypass -File \"{scriptPath}\"",
+                    logs);
+
+                if (exitCode != 0)
+                    return StatusCode(500, new { success = false, logs, error = "Güncelleme betiği hata ile sonlandı." });
+
+                logs.Add("✅ Güncelleme başarıyla tamamlandı!");
+                return Ok(new { success = true, logs });
+            }
+
+            // 3. Compose dosyası ile docker compose komutu
+            string? composeFile = null;
+            if (!string.IsNullOrWhiteSpace(configComposePath) && System.IO.File.Exists(configComposePath))
+            {
+                composeFile = configComposePath;
+                logs.Add($"▶ Yapılandırılmış Compose dosyası kullanılıyor: {Path.GetFileName(composeFile)}");
+            }
+            else
+            {
+                // Fallback: dizin taraması
+                composeFile = FindComposeFile(AppContext.BaseDirectory);
+                if (composeFile != null)
+                    logs.Add($"▶ Docker Compose dosyası bulundu: {Path.GetFileName(composeFile)}");
             }
 
             if (composeFile == null)
             {
                 logs.Add("⚠ docker-compose.yml bulunamadı.");
-                return StatusCode(500, new { success = false, logs, error = "Compose dosyası bulunamadı." });
+                logs.Add("  → Çözüm: docker-compose ortamında aşağıdaki environment variable'ı tanımlayın:");
+                logs.Add("    Update__ComposeFilePath=/host/path/to/docker-compose.prod.yml");
+                return StatusCode(500, new { success = false, logs, error = "Compose dosyası bulunamadı. Lütfen 'Update__ComposeFilePath' ortam değişkenini ayarlayın." });
             }
-
-            logs.Add($"▶ Docker Compose: {Path.GetFileName(composeFile)}");
 
             logs.Add("[1/2] Güncel Docker imajları indiriliyor...");
             var (pullCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" pull", logs);
@@ -182,7 +215,7 @@ public class SystemController(
         var dir = startDir;
         for (var i = 0; i < 8; i++)
         {
-            foreach (var name in new[] { "docker-compose.prod.yml", "docker-compose.yml" })
+            foreach (var name in new[] { "docker-compose.prod.yml", "docker-compose.windows.yml", "docker-compose.yml" })
             {
                 var candidate = Path.Combine(dir, name);
                 if (System.IO.File.Exists(candidate)) return candidate;
