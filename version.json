@@ -1,5 +1,5 @@
 {
-  "version": "1.1.11",
+  "version": "1.1.12",
   "releaseNotes": "Guncelleme sirasindaki 504 Gateway Timeout hatasini onlemek icin background updater ve polling yapisi eklendi.",
   "releaseDate": "2026-07-08"
 }
