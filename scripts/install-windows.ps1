@@ -38,6 +38,8 @@ if (-not $dockerCmd) {
 try {
     $dockerVersion = docker version --format "{{.Server.Version}}" 2>$null
     Write-OK "Docker Desktop calisiyor (v$dockerVersion)"
+    Write-Warn "UI uzerinden guncelleme yapabilmek icin Docker Desktop ayarlarindan"
+    Write-Warn "'Expose daemon on tcp://localhost:2375 without TLS' secenegini etkinlestirin."
 } catch {
     Write-Fail "Docker Desktop kurulu fakat calismiyor. Lutfen Docker Desktop'i baslatin."
     exit 1
@@ -64,29 +66,35 @@ Write-Step "Nova ERP dosyalari kopyalaniyor..."
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RepoRoot  = Split-Path -Parent $ScriptDir
 
-$filesToCopy = @(
-    "docker-compose.windows.yml",
-    "version.json"
-)
-foreach ($f in $filesToCopy) {
-    $src = Join-Path $RepoRoot $f
-    if (Test-Path $src) {
-        Copy-Item $src -Destination $InstallDir -Force
-        Write-OK "Kopyalandi: $f"
-    } else {
-        Write-Warn "Bulunamadi (atlandi): $f"
+# Script zaten InstallDir icinden calisiyorsa kopyalamaya gerek yok
+$alreadyInPlace = ($RepoRoot.TrimEnd('\') -eq $InstallDir.TrimEnd('\'))
+
+if ($alreadyInPlace) {
+    Write-Warn "Script zaten kurulum dizininden calisiyor. Kopyalama atlaniyor."
+} else {
+    $filesToCopy = @(
+        "docker-compose.windows.yml",
+        "version.json"
+    )
+    foreach ($f in $filesToCopy) {
+        $src = Join-Path $RepoRoot $f
+        if (Test-Path $src) {
+            Copy-Item $src -Destination $InstallDir -Force
+            Write-OK "Kopyalandi: $f"
+        } else {
+            Write-Warn "Bulunamadi (atlandi): $f"
+        }
+    }
+
+    # scripts/ klasorunu kopyala
+    $scriptsSource = Join-Path $RepoRoot "scripts"
+    if (Test-Path $scriptsSource) {
+        Copy-Item $scriptsSource -Destination $InstallDir -Recurse -Force
+        Write-OK "scripts/ klasoru kopyalandi"
     }
 }
 
-# scripts/ klasorunu kopyala
-$scriptsSource = Join-Path $RepoRoot "scripts"
-$scriptsDest   = Join-Path $InstallDir "scripts"
-if (Test-Path $scriptsSource) {
-    Copy-Item $scriptsSource -Destination $scriptsDest -Recurse -Force
-    # Kurulum scriptinin kendisini de uzerine yaz (eski surumlerin uzerine yazilmasi icin)
-    Copy-Item $MyInvocation.MyCommand.Path -Destination (Join-Path $scriptsDest "install-windows.ps1") -Force
-    Write-OK "scripts/ klasoru kopyalandi"
-}
+$scriptsDest = Join-Path $InstallDir "scripts"
 
 # -- 4. backup-db.ps1 yedekleme dizinini guncelle ------------------------------
 Write-Step "Yedekleme scripti yapilandiriliyor..."

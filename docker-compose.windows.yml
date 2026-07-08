@@ -6,17 +6,12 @@ services:
       ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=novadb;Username=nova;Password=nova
       Jwt__Secret: Nova_System_Super_Secret_Key_2026_AtLeast32Chars!
       Jwt__ExpiryMinutes: "15"
-      # Windows: kurulum dizinini değiştirdiyseniz aşağıdaki yolları güncelleyin.
-      # install-windows.ps1 varsayılan olarak C:\Nova klasörüne kurar.
+      # Docker Desktop TCP endpoint (bkz. install-windows.ps1 kurulum notlari)
+      DOCKER_HOST: tcp://host.docker.internal:2375
       Update__ComposeFilePath: /host/docker-compose.windows.yml
       Update__UpdateScriptPath: /host/scripts/update-nova.ps1
     volumes:
-      # Windows Docker Desktop named pipe (Docker socket)
-      - type: npipe
-        source: \\.\pipe\docker_engine
-        target: \\.\pipe\docker_engine
-      # Nova kurulum dizinini container'a bağla (host path → /host)
-      # install-windows.ps1 ile C:\Nova'ya kurulumda bu yol otomatik ayarlanır.
+      # Nova kurulum dizinini container'a bagla
       - C:\Nova:/host
     ports:
       - "5000:80"
