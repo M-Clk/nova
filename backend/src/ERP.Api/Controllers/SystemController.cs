@@ -115,25 +115,37 @@ public class SystemController(
             var configScriptPath = configuration["Update:UpdateScriptPath"];
             var configComposePath = configuration["Update:ComposeFilePath"];
 
-            // 2. Script varsa çalıştır
+            // 2. Script varsa çalıştır (sadece uygun işletim sisteminde)
             string? scriptPath = null;
             if (!string.IsNullOrWhiteSpace(configScriptPath) && System.IO.File.Exists(configScriptPath))
             {
-                scriptPath = configScriptPath;
-                logs.Add($"▶ Yapılandırılmış güncelleme betiği kullanılıyor: {scriptPath}");
+                var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+                var isPs1 = configScriptPath.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase);
+                if (isWindows || !isPs1)
+                {
+                    scriptPath = configScriptPath;
+                    logs.Add($"▶ Yapılandırılmış güncelleme betiği kullanılıyor: {scriptPath}");
+                }
+                else
+                {
+                    logs.Add("⚠ Linux container icinde .ps1 betigi calistirilamaz. Docker Compose entegrasyonu kullanilacak.");
+                }
             }
             else
             {
-                // Fallback: dizin taraması
-                var appBase = AppContext.BaseDirectory;
-                var scriptsDir = FindScriptsDirectory(appBase);
-                if (scriptsDir != null)
+                // Fallback: sadece Windows host üzerinde çalışıyorsak yerel .ps1 aranabilir
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    var candidate = Path.Combine(scriptsDir, "update-nova.ps1");
-                    if (System.IO.File.Exists(candidate))
+                    var appBase = AppContext.BaseDirectory;
+                    var scriptsDir = FindScriptsDirectory(appBase);
+                    if (scriptsDir != null)
                     {
-                        scriptPath = candidate;
-                        logs.Add($"▶ Güncelleme betiği bulundu: {scriptPath}");
+                        var candidate = Path.Combine(scriptsDir, "update-nova.ps1");
+                        if (System.IO.File.Exists(candidate))
+                        {
+                            scriptPath = candidate;
+                            logs.Add($"▶ Güncelleme betiği bulundu: {scriptPath}");
+                        }
                     }
                 }
             }
@@ -175,6 +187,9 @@ public class SystemController(
                 return StatusCode(500, new { success = false, logs, error = "Compose dosyası bulunamadı. Lütfen 'Update__ComposeFilePath' ortam değişkenini ayarlayın." });
             }
 
+            // 4. Güncelleme öncesi otomatik DB Yedekleme adımı
+            await BackupDatabaseAsync(logs);
+
             logs.Add("[1/2] Güncel Docker imajları indiriliyor...");
             var (pullCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" pull", logs);
             if (pullCode != 0)
@@ -193,6 +208,60 @@ public class SystemController(
             logger.LogError(ex, "Apply update failed");
             logs.Add($"❌ Hata: {ex.Message}");
             return StatusCode(500, new { success = false, logs, error = ex.Message });
+        }
+    }
+
+    private async Task BackupDatabaseAsync(List<string> logs)
+    {
+        try
+        {
+            logs.Add("[Yedekleme] Veri tabanı yedekleme işlemi başlatılıyor...");
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var backupFile = $"novadb_backup_{timestamp}.dump";
+            var tempContainerPath = $"/tmp/{backupFile}";
+
+            // 1. pg_dump
+            logs.Add($"[Yedekleme] Container içinde dump dosyası oluşturuluyor (nova-db-1)...");
+            var (exitCode, _) = await RunProcessAsync("docker", $"exec nova-db-1 pg_dump -U nova -d novadb -F c -f {tempContainerPath}", logs);
+            if (exitCode != 0)
+            {
+                logs.Add("⚠ Veri tabanı yedeği alınamadı! Güncelleme işlemine güvenlik nedeniyle devam ediliyor.");
+                return;
+            }
+
+            // 2. host klasörüne kopyalama
+            var hostDir = "/host";
+            if (Directory.Exists(hostDir))
+            {
+                var backupsDir = Path.Combine(hostDir, "backups");
+                if (!Directory.Exists(backupsDir))
+                {
+                    Directory.CreateDirectory(backupsDir);
+                }
+
+                var targetPath = Path.Combine(backupsDir, backupFile);
+                logs.Add($"[Yedekleme] Yedek dosyası host sistemine kopyalanıyor: {targetPath}");
+                var (cpCode, _) = await RunProcessAsync("docker", $"cp nova-db-1:{tempContainerPath} {targetPath}", logs);
+                if (cpCode == 0)
+                {
+                    logs.Add($"✅ Veri tabanı yedeği başarıyla alındı: C:\\Nova\\backups\\{backupFile}");
+                }
+                else
+                {
+                    logs.Add("⚠ Yedek dosyası host sistemine aktarılamadı! Güncellemeye yedeksiz devam ediliyor.");
+                }
+            }
+            else
+            {
+                logs.Add("⚠ /host dizini bulunamadı, yedek dosyası dışa aktarılamadı. Güncellemeye yedeksiz devam ediliyor.");
+            }
+
+            // 3. /tmp temizliği
+            await RunProcessAsync("docker", $"exec nova-db-1 rm {tempContainerPath}", new List<string>());
+        }
+        catch (Exception ex)
+        {
+            logs.Add($"⚠ Yedekleme adımı başarısız oldu: {ex.Message}. Güncellemeye devam ediliyor.");
         }
     }
 
