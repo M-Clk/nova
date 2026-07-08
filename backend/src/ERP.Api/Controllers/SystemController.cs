@@ -7,6 +7,7 @@ using System.Net.Http.Json;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using System.Text.Json;
 using ERP.Application.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -278,8 +279,62 @@ public class SystemController(
                 }
 
                 lock (UpdateLogs) UpdateLogs.Add("[2/2] Konteynerler güncelleniyor...");
+                var hostDir = await GetHostDirectoryAsync();
+                int upCode = 0;
                 var upLogs = new List<string>();
-                var (upCode, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" -p {projectName} up -d --remove-orphans", upLogs);
+
+                if (hostDir == null)
+                {
+                    lock (UpdateLogs) UpdateLogs.Add("⚠ Host dizini tespit edilemedi. Doğrudan docker compose çalıştırılacak (recreate adımında kesinti yaşanabilir).");
+                    var (code, _) = await RunProcessAsync("docker", $"compose -f \"{composeFile}\" -p {projectName} up -d --remove-orphans", upLogs);
+                    upCode = code;
+                }
+                else
+                {
+                    lock (UpdateLogs) UpdateLogs.Add($"▶ Tespit edilen host dizini: {hostDir}");
+                    var dockerHost = Environment.GetEnvironmentVariable("DOCKER_HOST");
+                    var dockerArgs = new List<string> { "run", "--rm", "-d" };
+                    
+                    if (!string.IsNullOrEmpty(dockerHost))
+                    {
+                        dockerArgs.Add("-e");
+                        dockerArgs.Add($"DOCKER_HOST={dockerHost}");
+                        dockerArgs.Add("--add-host=host.docker.internal:host-gateway");
+                    }
+                    else
+                    {
+                        dockerArgs.Add("-v");
+                        dockerArgs.Add("/var/run/docker.sock:/var/run/docker.sock");
+                    }
+                    
+                    dockerArgs.Add("-v");
+                    dockerArgs.Add($"{hostDir}:/host");
+                    dockerArgs.Add("docker:cli");
+                    dockerArgs.Add("docker");
+                    dockerArgs.Add("compose");
+                    dockerArgs.Add("-f");
+                    dockerArgs.Add(composeFile);
+                    dockerArgs.Add("-p");
+                    dockerArgs.Add(projectName);
+                    dockerArgs.Add("up");
+                    dockerArgs.Add("-d");
+                    dockerArgs.Add("--remove-orphans");
+
+                    var escapedArgs = new List<string>();
+                    foreach (var arg in dockerArgs)
+                    {
+                        if (arg.Contains(" ") || arg.Contains(";") || arg.Contains("="))
+                            escapedArgs.Add($"\"{arg}\"");
+                        else
+                            escapedArgs.Add(arg);
+                    }
+                    var cmdArgs = string.Join(" ", escapedArgs);
+                    
+                    lock (UpdateLogs) UpdateLogs.Add("[Konteyner] Geçici güncelleme yardımcısı başlatılıyor...");
+                    var (code, _) = await RunProcessAsync("docker", cmdArgs, upLogs);
+                    upCode = code;
+                }
+
                 lock (UpdateLogs)
                 {
                     UpdateLogs.AddRange(upLogs);
@@ -317,6 +372,35 @@ public class SystemController(
         });
 
         return Ok(new { success = true, message = "Güncelleme arka planda başlatıldı." });
+    }
+
+    private async Task<string?> GetHostDirectoryAsync()
+    {
+        try
+        {
+            var hostname = Environment.MachineName;
+            var logs = new List<string>();
+            var (exitCode, output) = await RunProcessAsync("docker", $"inspect {hostname} --format \"{{{{json .Mounts}}}}\"", logs);
+            if (exitCode == 0 && !string.IsNullOrWhiteSpace(output))
+            {
+                using var doc = JsonDocument.Parse(output);
+                foreach (var element in doc.RootElement.EnumerateArray())
+                {
+                    if (element.TryGetProperty("Destination", out var destProp) && destProp.GetString() == "/host")
+                    {
+                        if (element.TryGetProperty("Source", out var sourceProp))
+                        {
+                            return sourceProp.GetString();
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to inspect host mount directory");
+        }
+        return null;
     }
 
     private async Task BackupDatabaseAsync(List<string> logs)
