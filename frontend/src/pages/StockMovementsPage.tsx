@@ -185,17 +185,17 @@ export function StockMovementsPage() {
   const addMovement = useMutation({
     mutationFn: async () => apiClient.post<StockMovementDto>("/stock/movements", form),
     onSuccess: () => {
-      setForm({ productId: "", warehouseId: "", type: 1, quantity: 1, unitPrice: 0 });
+      setForm((prev) => ({
+        ...prev,
+        productId: "",
+        quantity: 1,
+        unitPrice: 0,
+      }));
       setBarcodeSearch("");
-      setIsFormOpen(false);
       queryClient.invalidateQueries({ queryKey: ["stock-current"] });
       queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
       setSnack({ open: true, message: "Stok hareketi başarıyla kaydedildi.", severity: "success" });
-      // Re-open form and focus barcode for next scan
-      setTimeout(() => {
-        setIsFormOpen(true);
-        setTimeout(() => barcodeInputRef.current?.focus(), 200);
-      }, 300);
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     },
     onError: (err: unknown) => {
       const msg =

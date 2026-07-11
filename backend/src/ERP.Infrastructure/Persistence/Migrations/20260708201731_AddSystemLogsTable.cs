@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -11,39 +11,32 @@ namespace ERP.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateTable(
-                name: "system_logs",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    message = table.Column<string>(type: "text", nullable: true),
-                    message_template = table.Column<string>(type: "text", nullable: true),
-                    level = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
-                    timestamp = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    exception = table.Column<string>(type: "text", nullable: true),
-                    properties = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_system_logs", x => x.id);
-                });
+            migrationBuilder.Sql(@"
+                CREATE TABLE IF NOT EXISTS system_logs (
+                    id uuid NOT NULL DEFAULT (gen_random_uuid()),
+                    message text,
+                    message_template text,
+                    level character varying(128),
+                    timestamp timestamp with time zone NOT NULL,
+                    exception text,
+                    properties text,
+                    CONSTRAINT ""PK_system_logs"" PRIMARY KEY (id)
+                );
+            ");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_system_logs_level",
-                table: "system_logs",
-                column: "level");
+            migrationBuilder.Sql(@"
+                CREATE INDEX IF NOT EXISTS ""IX_system_logs_level"" ON system_logs (level);
+            ");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_system_logs_timestamp",
-                table: "system_logs",
-                column: "timestamp");
+            migrationBuilder.Sql(@"
+                CREATE INDEX IF NOT EXISTS ""IX_system_logs_timestamp"" ON system_logs (timestamp);
+            ");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "system_logs");
+            migrationBuilder.Sql("DROP TABLE IF EXISTS system_logs;");
         }
     }
 }

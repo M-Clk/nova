@@ -121,6 +121,39 @@ export function POSPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
+  // Global click listener to keep focus on barcode input unless clicking an interactive element
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target) return;
+
+      const isInteractive =
+        target.tagName === "INPUT" ||
+        target.tagName === "BUTTON" ||
+        target.tagName === "SELECT" ||
+        target.tagName === "TEXTAREA" ||
+        target.closest("button") ||
+        target.closest("a") ||
+        target.closest("[role='combobox']") ||
+        target.closest("[role='listbox']") ||
+        target.closest("[role='option']") ||
+        target.closest(".MuiMenuItem-root") ||
+        target.closest(".MuiSelect-select") ||
+        target.closest(".MuiPopover-root") ||
+        target.closest(".MuiMenu-root") ||
+        target.closest(".MuiDialog-root");
+
+      if (!isInteractive) {
+        setTimeout(() => {
+          barcodeRef.current?.focus();
+        }, 30);
+      }
+    };
+
+    document.addEventListener("click", handleGlobalClick);
+    return () => document.removeEventListener("click", handleGlobalClick);
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -166,6 +199,8 @@ export function POSPage() {
 
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isScanning) return; // Prevent concurrent scans
+
     const code = barcodeInput.trim();
     if (!code) return;
 
@@ -265,7 +300,6 @@ export function POSPage() {
               onChange={(e) => setBarcodeInput(e.target.value)}
               placeholder="Barkod okutun veya yazın, Enter'a basın..."
               autoComplete="off"
-              disabled={isScanning}
               inputProps={{
                 id: "pos-barcode-input",
                 style: { fontSize: "1.1rem", letterSpacing: "0.05em", fontFamily: "monospace" },
