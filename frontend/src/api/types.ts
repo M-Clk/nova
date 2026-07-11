@@ -73,14 +73,27 @@ export type CustomerDto = {
   phone: string;
 };
 
+export type SaleItemDto = {
+  id: string;
+  productId: string;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  discountAmount: number;
+  lineTotal: number;
+};
+
 export type SaleDto = {
   id: string;
   saleNo: string;
+  customerId?: string;
   customerName?: string;
   totalAmount: number;
   discountAmount: number;
   netAmount: number;
   createdAt: string;
+  items: SaleItemDto[];
 };
 
 export type StockMovementDto = {

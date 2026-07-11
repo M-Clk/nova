@@ -56,12 +56,15 @@ import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import KeyIcon from "@mui/icons-material/Key";
 import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
+import ReceiptOutlinedIcon from "@mui/icons-material/ReceiptOutlined";
+import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 
 import { useThemeMode } from "../theme/ThemeContext";
 import { useAuth } from "../auth/AuthContext";
 import { useLicense } from "../context/LicenseContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/apiClient";
+import { loadCompanyInfo, type CompanyInfo } from "../components/SaleReceiptModal";
 import {
   TerminalDto,
   CreateTerminalRequest,
@@ -1722,6 +1725,99 @@ function AppearanceTabContent() {
   );
 }
 
+// ─── Şirket Bilgileri Tab ──────────────────────────────────────────────────────
+
+function CompanyInfoTab() {
+  const [info, setInfo] = useState<CompanyInfo>(loadCompanyInfo);
+  const [saved, setSaved] = useState(false);
+
+  const handleChange = (field: keyof CompanyInfo) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInfo((prev) => ({ ...prev, [field]: e.target.value }));
+    setSaved(false);
+  };
+
+  const handleSave = () => {
+    localStorage.setItem("companyInfo", JSON.stringify(info));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  return (
+    <Stack spacing={2.5}>
+      <Alert severity="info" sx={{ borderRadius: 2, fontSize: "0.82rem" }}>
+        Buraya girdiğiniz bilgiler satış makbuzlarının başlığında görünür.
+        Resmi fatura bilgileri değildir; kendi işletme bilgilerinizi girin.
+      </Alert>
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+        <TextField
+          label="Şirket / İşletme Adı"
+          value={info.name}
+          onChange={handleChange("name")}
+          fullWidth
+          required
+        />
+        <TextField
+          label="Vergi No / TC Kimlik No"
+          value={info.taxNo}
+          onChange={handleChange("taxNo")}
+          fullWidth
+        />
+        <TextField
+          label="Adres"
+          value={info.address}
+          onChange={handleChange("address")}
+          fullWidth
+          multiline
+          rows={2}
+          sx={{ gridColumn: { sm: "1 / -1" } }}
+        />
+        <TextField
+          label="Telefon"
+          value={info.phone}
+          onChange={handleChange("phone")}
+          fullWidth
+        />
+        <TextField
+          label="E-posta"
+          value={info.email}
+          onChange={handleChange("email")}
+          fullWidth
+        />
+        <TextField
+          label="Web Sitesi"
+          value={info.website}
+          onChange={handleChange("website")}
+          fullWidth
+        />
+        <TextField
+          label="Makbuz Alt Notu (Teşekkür mesajı vb.)"
+          value={info.receiptFooter}
+          onChange={handleChange("receiptFooter")}
+          fullWidth
+          sx={{ gridColumn: { sm: "1 / -1" } }}
+        />
+      </Box>
+
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Button
+          variant="contained"
+          startIcon={<SaveOutlinedIcon />}
+          onClick={handleSave}
+          sx={{ borderRadius: 2, px: 3 }}
+        >
+          Kaydet
+        </Button>
+        {saved && (
+          <Alert severity="success" sx={{ py: 0.5, px: 1.5, borderRadius: 2, fontSize: "0.82rem" }}>
+            Kaydedildi!
+          </Alert>
+        )}
+      </Box>
+    </Stack>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
@@ -1739,6 +1835,11 @@ export function SettingsPage() {
         label: "Görünüm",
         icon: <PaletteOutlinedIcon fontSize="small" />,
         component: <SettingsSection title="Görünüm" icon={<PaletteOutlinedIcon fontSize="small" />}><AppearanceTabContent /></SettingsSection>
+      },
+      {
+        label: "Şirket Bilgileri",
+        icon: <ReceiptOutlinedIcon fontSize="small" />,
+        component: <SettingsSection title="Şirket / İşletme Bilgileri" icon={<ReceiptOutlinedIcon fontSize="small" />}><CompanyInfoTab /></SettingsSection>
       }
     ];
 

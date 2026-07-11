@@ -38,7 +38,6 @@ public class SalesController(ISaleService sales) : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = "Admin,Manager")]
     public async Task<ActionResult<SaleDto>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var sale = await sales.GetByIdAsync(id, cancellationToken);

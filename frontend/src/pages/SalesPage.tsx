@@ -14,16 +14,19 @@ import {
   Chip,
   InputAdornment,
   TablePagination,
-  Autocomplete
+  Autocomplete,
+  Tooltip
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import KeyboardIcon from "@mui/icons-material/Keyboard";
+import PrintIcon from "@mui/icons-material/Print";
 import { apiClient } from "../api/apiClient";
 import { ProductDto, ReferenceDataDto, SaleDto, CustomerDto, PaginatedListDto } from "../api/types";
 import { DataTable } from "../components/DataTable";
+import { SaleReceiptModal } from "../components/SaleReceiptModal";
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount);
@@ -50,6 +53,10 @@ export function SalesPage() {
   // Pagination states
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
+
+  // Receipt state
+  const [receiptSale, setReceiptSale] = useState<SaleDto | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState<string | null>(null); // sale id being loaded
 
   // Reset page when filters change
   useEffect(() => {
@@ -180,6 +187,18 @@ export function SalesPage() {
     setDateFilter("all");
     setMinAmount("");
     setMaxAmount("");
+  };
+
+  const handlePrintSale = async (saleId: string) => {
+    setReceiptLoading(saleId);
+    try {
+      const { data } = await apiClient.get<SaleDto>(`/sales/${saleId}`);
+      setReceiptSale(data);
+    } catch {
+      // silently fail
+    } finally {
+      setReceiptLoading(null);
+    }
   };
 
   return (
@@ -455,14 +474,28 @@ export function SalesPage() {
       {/* Data Table */}
       <DataTable
         isLoading={sales.isLoading}
-        columns={["Sipariş No", "Müşteri", "Toplam Tutar", "İndirim", "Net Tutar", "Tarih"]}
+        columns={["Sipariş No", "Müşteri", "Toplam Tutar", "İndirim", "Net Tutar", "Tarih", ""]}
         rows={(sales.data?.items ?? []).map((s) => [
           <Typography variant="body2" fontWeight={700} color="primary.main">{s.saleNo}</Typography>,
           s.customerName ?? <span style={{ opacity: 0.6 }}>Misafir Müşteri</span>,
           fmt(s.totalAmount),
           fmt(s.discountAmount),
           <Typography variant="body2" fontWeight={700} color="success.main">{fmt(s.netAmount)}</Typography>,
-          new Date(s.createdAt).toLocaleString("tr-TR")
+          new Date(s.createdAt).toLocaleString("tr-TR"),
+          <Tooltip title="Makbuz Yazdır">
+            <span>
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => handlePrintSale(s.id)}
+                disabled={receiptLoading === s.id}
+              >
+                {receiptLoading === s.id
+                  ? <span style={{ fontSize: 14, opacity: 0.5 }}>...</span>
+                  : <PrintIcon fontSize="small" />}
+              </IconButton>
+            </span>
+          </Tooltip>
         ])}
       />
 
@@ -479,6 +512,13 @@ export function SalesPage() {
         }}
         labelRowsPerPage="Sayfa başına satır:"
         labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
+      />
+
+      {/* Satış Makbuz Modal */}
+      <SaleReceiptModal
+        open={!!receiptSale}
+        sale={receiptSale}
+        onClose={() => setReceiptSale(null)}
       />
     </Stack>
   );

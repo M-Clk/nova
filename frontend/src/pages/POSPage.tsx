@@ -23,6 +23,8 @@ import {
   CircularProgress,
   Tooltip,
   Badge,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddIcon from "@mui/icons-material/Add";
@@ -33,6 +35,7 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import KeyboardIcon from "@mui/icons-material/Keyboard";
+import PrintIcon from "@mui/icons-material/Print";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiClient } from "../api/apiClient";
 import type {
@@ -41,8 +44,10 @@ import type {
   TerminalDto,
   PosCheckoutResult,
   PosCheckoutRequest,
+  SaleDto,
 } from "../api/types";
 import { useCart } from "../context/CartContext";
+import { SaleReceiptModal } from "../components/SaleReceiptModal";
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
@@ -91,6 +96,8 @@ export function POSPage() {
     severity: "success",
   });
   const [lastSale, setLastSale] = useState<PosCheckoutResult | null>(null);
+  const [printReceipt, setPrintReceipt] = useState(false);
+  const [receiptSale, setReceiptSale] = useState<SaleDto | null>(null);
   const barcodeRef = useRef<HTMLInputElement>(null);
 
   const { data: terminals = [], isLoading: terminalsLoading } = useQuery({
@@ -189,11 +196,23 @@ export function POSPage() {
 
   const checkoutMutation = useMutation({
     mutationFn: checkout,
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       setLastSale(result);
       clearCart();
       setBarcodeInput("");
       showSnack(`✓ Satış tamamlandı! Fiş No: ${result.saleNo}`, "success");
+
+      // Eğer "Fiş Yaz" seçiliyse, tam satış verisini API'den çek ve modal aç
+      if (printReceipt) {
+        try {
+          const { data } = await apiClient.get<SaleDto>(`/sales/${result.saleId}`);
+          setReceiptSale(data);
+        } catch {
+          // silently fail
+        }
+        setPrintReceipt(false); // Sonraki satış için deselect
+      }
+
       setTimeout(() => barcodeRef.current?.focus(), 100);
     },
     onError: (err: unknown) => {
@@ -650,6 +669,27 @@ export function POSPage() {
             </Box>
           </Box>
 
+          {/* Fiş Yaz checkbox */}
+          <Box sx={{ mt: 2, display: "flex", alignItems: "center" }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={printReceipt}
+                  onChange={(e) => setPrintReceipt(e.target.checked)}
+                  size="small"
+                  icon={<PrintIcon fontSize="small" sx={{ opacity: 0.35 }} />}
+                  checkedIcon={<PrintIcon fontSize="small" color="primary" />}
+                />
+              }
+              label={
+                <Typography variant="body2" color={printReceipt ? "primary.main" : "text.secondary"} fontWeight={printReceipt ? 600 : 400}>
+                  Fiş Yaz
+                </Typography>
+              }
+              sx={{ m: 0, userSelect: "none" }}
+            />
+          </Box>
+
           {/* Last sale info */}
           {lastSale && (
             <Alert
@@ -738,6 +778,16 @@ export function POSPage() {
           {snack.message}
         </Alert>
       </Snackbar>
+
+      {/* Satış Makbuz Modal */}
+      <SaleReceiptModal
+        open={!!receiptSale}
+        sale={receiptSale}
+        onClose={() => {
+          setReceiptSale(null);
+          setTimeout(() => barcodeRef.current?.focus(), 100);
+        }}
+      />
     </Box>
   );
 }
