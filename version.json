@@ -1,5 +1,5 @@
 {
-  "version": "1.2.2",
-  "releaseNotes": "Ekranlar barkod okuyucu ile rahat kullanılabilir hale getirildi. Db hatasi giderildi.",
+  "version": "1.2.3",
+  "releaseNotes": "Pos kasasi ekraninda barkod auto focus yapilamamasi hatasi giderildi.",
   "releaseDate": "2026-07-12"
 }

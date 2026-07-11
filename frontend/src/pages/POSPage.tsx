@@ -121,6 +121,14 @@ export function POSPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
+  // State-driven automatic focus: Whenever cart, scanning status, last sale, or terminal changes, force focus on barcode field
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      barcodeRef.current?.focus();
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [cart, isScanning, lastSale, selectedTerminalId]);
+
   // Global click listener to keep focus on barcode input unless clicking an interactive element
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
@@ -300,6 +308,11 @@ export function POSPage() {
               onChange={(e) => setBarcodeInput(e.target.value)}
               placeholder="Barkod okutun veya yazın, Enter'a basın..."
               autoComplete="off"
+              onKeyDown={(e) => {
+                if (e.key === "Tab") {
+                  e.preventDefault();
+                }
+              }}
               inputProps={{
                 id: "pos-barcode-input",
                 style: { fontSize: "1.1rem", letterSpacing: "0.05em", fontFamily: "monospace" },
