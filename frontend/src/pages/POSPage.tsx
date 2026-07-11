@@ -105,9 +105,20 @@ export function POSPage() {
     }
   }, [terminals, selectedTerminalId, setSelectedTerminalId]);
 
-  // Auto-focus barcode input
+  // Auto-focus barcode input on mount
   useEffect(() => {
     barcodeRef.current?.focus();
+  }, []);
+
+  // Re-focus barcode when user returns to tab
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setTimeout(() => barcodeRef.current?.focus(), 50);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
   // Keyboard shortcuts
@@ -149,6 +160,7 @@ export function POSPage() {
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
         "Satış tamamlanırken hata oluştu.";
       showSnack(msg, "error");
+      setTimeout(() => barcodeRef.current?.focus(), 100);
     },
   });
 
@@ -402,7 +414,7 @@ export function POSPage() {
                           <IconButton
                             size="small"
                             id={`pos-dec-${item.productId}`}
-                            onClick={() => updateQty(item.productId, -1)}
+                            onClick={() => { updateQty(item.productId, -1); setTimeout(() => barcodeRef.current?.focus(), 50); }}
                             sx={{ width: 26, height: 26 }}
                           >
                             <RemoveIcon sx={{ fontSize: 14 }} />
@@ -417,7 +429,7 @@ export function POSPage() {
                           <IconButton
                             size="small"
                             id={`pos-inc-${item.productId}`}
-                            onClick={() => updateQty(item.productId, 1)}
+                            onClick={() => { updateQty(item.productId, 1); setTimeout(() => barcodeRef.current?.focus(), 50); }}
                             sx={{ width: 26, height: 26 }}
                           >
                             <AddIcon sx={{ fontSize: 14 }} />
@@ -437,7 +449,7 @@ export function POSPage() {
                           <IconButton
                             size="small"
                             id={`pos-remove-${item.productId}`}
-                            onClick={() => removeItem(item.productId)}
+                            onClick={() => { removeItem(item.productId); setTimeout(() => barcodeRef.current?.focus(), 50); }}
                             color="error"
                             sx={{ width: 26, height: 26 }}
                           >
@@ -634,7 +646,10 @@ export function POSPage() {
       <Snackbar
         open={snack.open}
         autoHideDuration={3500}
-        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+        onClose={() => {
+          setSnack((s) => ({ ...s, open: false }));
+          setTimeout(() => barcodeRef.current?.focus(), 50);
+        }}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert

@@ -88,6 +88,7 @@ export function StockMovementsPage() {
   }, [currentBarcodeSearch, currentNameSearch, currentWarehouse]);
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const quantityRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -104,6 +105,24 @@ export function StockMovementsPage() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
+
+  // Auto-focus barcode when form opens
+  useEffect(() => {
+    if (isFormOpen) {
+      setTimeout(() => barcodeInputRef.current?.focus(), 150);
+    }
+  }, [isFormOpen]);
+
+  // Re-focus barcode when user returns to tab (if form is open)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && isFormOpen) {
+        setTimeout(() => barcodeInputRef.current?.focus(), 50);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [isFormOpen]);
 
   const [form, setForm] = useState<AddStockMovementRequest>({
     productId: "",
@@ -172,12 +191,18 @@ export function StockMovementsPage() {
       queryClient.invalidateQueries({ queryKey: ["stock-current"] });
       queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
       setSnack({ open: true, message: "Stok hareketi başarıyla kaydedildi.", severity: "success" });
+      // Re-open form and focus barcode for next scan
+      setTimeout(() => {
+        setIsFormOpen(true);
+        setTimeout(() => barcodeInputRef.current?.focus(), 200);
+      }, 300);
     },
     onError: (err: unknown) => {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
         "Kayıt sırasında bir hata oluştu.";
       setSnack({ open: true, message: msg, severity: "error" });
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     }
   });
 
@@ -227,6 +252,8 @@ export function StockMovementsPage() {
         }));
         setBarcodeSearch("");
         setSnack({ open: true, message: `Ürün bulundu: ${localProduct.name}`, severity: "success" });
+        // Jump to quantity field after barcode scan
+        setTimeout(() => quantityRef.current?.focus(), 50);
         return;
       }
 
@@ -244,12 +271,16 @@ export function StockMovementsPage() {
           }));
           setBarcodeSearch("");
           setSnack({ open: true, message: `Ürün bulundu: ${fullProduct.name}`, severity: "success" });
+          // Jump to quantity field after barcode scan
+          setTimeout(() => quantityRef.current?.focus(), 50);
         }
       } else {
         setSnack({ open: true, message: `Barkod bulunamadı: ${code}`, severity: "warning" });
+        barcodeInputRef.current?.focus();
       }
     } catch {
       setSnack({ open: true, message: `Barkod bulunamadı veya hata oluştu: ${code}`, severity: "warning" });
+      barcodeInputRef.current?.focus();
     }
   };
 
@@ -489,6 +520,7 @@ export function StockMovementsPage() {
                   fullWidth
                   size="small"
                   inputProps={{ min: 0.01, step: 0.01 }}
+                  inputRef={quantityRef}
                 />
               </Grid>
 

@@ -1,6 +1,6 @@
-import { FormEvent, useState, useEffect, useMemo } from "react";
+import { FormEvent, useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { 
+import {
   Button, 
   MenuItem, 
   Paper, 
@@ -20,6 +20,7 @@ import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
+import KeyboardIcon from "@mui/icons-material/Keyboard";
 import { apiClient } from "../api/apiClient";
 import { ProductDto, ReferenceDataDto, SaleDto, CustomerDto, PaginatedListDto } from "../api/types";
 import { DataTable } from "../components/DataTable";
@@ -30,6 +31,8 @@ const fmt = (amount: number) =>
 export function SalesPage() {
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const quantityRef = useRef<HTMLInputElement>(null);
+  const autocompleteInputRef = useRef<HTMLInputElement>(null);
 
   const [customerId, setCustomerId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
@@ -52,6 +55,24 @@ export function SalesPage() {
   useEffect(() => {
     setPage(0);
   }, [search, dateFilter, minAmount, maxAmount]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      // F2 — formu aç ve ürün alanına fokuslan
+      if (e.key === "F2") {
+        e.preventDefault();
+        setIsFormOpen(true);
+        setTimeout(() => autocompleteInputRef.current?.focus(), 150);
+      }
+      // ESC — formu kapat
+      else if (e.key === "Escape") {
+        setIsFormOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
 
   const products = useQuery({
     queryKey: ["products"],
@@ -89,16 +110,25 @@ export function SalesPage() {
     }
   }, [references.data]);
 
-  // Update unitPrice when product is selected
-  const handleProductChange = (prodId: string) => {
+  // Auto-focus product field when form opens
+  useEffect(() => {
+    if (isFormOpen) {
+      setTimeout(() => autocompleteInputRef.current?.focus(), 150);
+    }
+  }, [isFormOpen]);
+
+  // Update unitPrice when product is selected, then jump to quantity
+  const handleProductChange = useCallback((prodId: string) => {
     setProductId(prodId);
     const selectedProd = products.data?.find(p => p.id === prodId);
     if (selectedProd) {
       setUnitPrice(selectedProd.salePrice);
+      // Jump to quantity field
+      setTimeout(() => quantityRef.current?.focus(), 50);
     } else {
       setUnitPrice("");
     }
-  };
+  }, [products.data]);
 
   const create = useMutation({
     mutationFn: async () => {
@@ -125,11 +155,17 @@ export function SalesPage() {
       queryClient.invalidateQueries({ queryKey: ["stock-current"] });
       queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      // Re-open form for next sale and focus product field
+      setTimeout(() => {
+        setIsFormOpen(true);
+        setTimeout(() => autocompleteInputRef.current?.focus(), 200);
+      }, 300);
     }
   });
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (!productId || !references.data || create.isPending) return;
     create.mutate();
   }
 
@@ -158,14 +194,35 @@ export function SalesPage() {
             Müşteri satışlarını kaydedin ve stok seviyelerini güncelleyin
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={isFormOpen ? <CloseIcon /> : <AddIcon />}
-          onClick={() => setIsFormOpen(!isFormOpen)}
-        >
-          {isFormOpen ? "Vazgeç" : "Satış Oluştur"}
-        </Button>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          {/* Keyboard shortcuts hint */}
+          <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1.5 }}>
+            {[
+              { key: "F2", label: "Yeni Satış" },
+              { key: "ESC", label: "Vazgeç" },
+            ].map((s) => (
+              <Box key={s.key} sx={{ display: "flex", alignItems: "center", gap: 0.6 }}>
+                <Chip
+                  icon={<KeyboardIcon sx={{ fontSize: "14px !important" }} />}
+                  label={s.key}
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  sx={{ fontSize: "0.7rem", fontFamily: "monospace", fontWeight: 700, height: 22 }}
+                />
+                <Typography variant="caption" color="text.secondary">{s.label}</Typography>
+              </Box>
+            ))}
+          </Box>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={isFormOpen ? <CloseIcon /> : <AddIcon />}
+            onClick={() => setIsFormOpen(!isFormOpen)}
+          >
+            {isFormOpen ? "Vazgeç" : "Satış Oluştur"}
+          </Button>
+        </Box>
       </Box>
 
       {/* Form Card */}
@@ -239,6 +296,7 @@ export function SalesPage() {
                     placeholder="Ürün adı, kod veya barkod yazın..."
                     required
                     fullWidth
+                    inputRef={autocompleteInputRef}
                   />
                 )}
                 noOptionsText="Ürün bulunamadı"
@@ -252,6 +310,7 @@ export function SalesPage() {
                 onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))} 
                 required
                 fullWidth
+                inputRef={quantityRef}
               />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>

@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
-  "releaseNotes": "Loglama altyapisi eklendi. ",
-  "releaseDate": "2026-07-09"
+  "version": "1.2.1",
+  "releaseNotes": "Ekranlar barkod okuyucu ile rahat kullanılabilir hale getirildi.",
+  "releaseDate": "2026-07-11"
 }
