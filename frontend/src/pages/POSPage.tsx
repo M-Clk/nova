@@ -312,6 +312,36 @@ export function POSPage() {
                 if (e.key === "Tab") {
                   e.preventDefault();
                 }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleBarcodeSubmit(e);
+                }
+              }}
+              onBlur={() => {
+                setTimeout(() => {
+                  const activeEl = document.activeElement as HTMLElement | null;
+                  if (activeEl === barcodeRef.current) return;
+                  if (activeEl) {
+                    const isInteractive =
+                      activeEl.tagName === "INPUT" ||
+                      activeEl.tagName === "BUTTON" ||
+                      activeEl.tagName === "SELECT" ||
+                      activeEl.tagName === "TEXTAREA" ||
+                      activeEl.closest("button") ||
+                      activeEl.closest("a") ||
+                      activeEl.closest("[role='combobox']") ||
+                      activeEl.closest("[role='listbox']") ||
+                      activeEl.closest("[role='option']") ||
+                      activeEl.closest(".MuiMenuItem-root") ||
+                      activeEl.closest(".MuiSelect-select") ||
+                      activeEl.closest(".MuiPopover-root") ||
+                      activeEl.closest(".MuiMenu-root") ||
+                      activeEl.closest(".MuiDialog-root");
+
+                    if (isInteractive) return;
+                  }
+                  barcodeRef.current?.focus();
+                }, 50);
               }}
               inputProps={{
                 id: "pos-barcode-input",
