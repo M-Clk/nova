@@ -189,6 +189,7 @@ export type PosCheckoutRequest = {
   customerId: string | null;
   terminalId: string;
   items: PosCheckoutItemRequest[];
+  discountAmount?: number;
 };
 
 export type PosCheckoutResult = {

@@ -20,7 +20,8 @@ public record PosProductDto(
 public record PosCheckoutRequest(
     Guid? CustomerId,
     Guid TerminalId,
-    IReadOnlyList<PosCheckoutItemRequest> Items);
+    IReadOnlyList<PosCheckoutItemRequest> Items,
+    decimal DiscountAmount = 0);
 
 public record PosCheckoutItemRequest(
     Guid ProductId,

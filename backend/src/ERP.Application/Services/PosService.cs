@@ -65,6 +65,25 @@ public class PosService(IErpDbContext db) : IPosService
                 .Where(x => productIds.Contains(x.Id) && x.IsActive)
                 .ToDictionaryAsync(x => x.Id, cancellationToken);
 
+            // Ara Toplam hesaplama ve indirim doğrulama
+            decimal totalGrossAmount = 0;
+            foreach (var item in request.Items)
+            {
+                if (item.Quantity <= 0)
+                    throw new InvalidOperationException("Ürün miktarı sıfırdan büyük olmalıdır.");
+
+                if (!productsById.TryGetValue(item.ProductId, out var product))
+                    throw new InvalidOperationException($"Ürün bulunamadı veya aktif değil: {item.ProductId}");
+
+                totalGrossAmount += item.Quantity * product.SalePrice;
+            }
+
+            if (request.DiscountAmount < 0)
+                throw new InvalidOperationException("İndirim tutarı sıfırdan küçük olamaz.");
+
+            if (request.DiscountAmount > totalGrossAmount)
+                throw new InvalidOperationException("İndirim tutarı toplam tutardan büyük olamaz.");
+
             var now = DateTime.UtcNow;
             var sale = new Sale
             {
@@ -75,16 +94,33 @@ public class PosService(IErpDbContext db) : IPosService
                 CreatedAt = now
             };
 
+            decimal distributedDiscountSum = 0;
+            int itemIndex = 0;
+            int totalItems = request.Items.Count;
+
             foreach (var item in request.Items)
             {
-                if (item.Quantity <= 0)
-                    throw new InvalidOperationException("Ürün miktarı sıfırdan büyük olmalıdır.");
-
-                if (!productsById.TryGetValue(item.ProductId, out var product))
-                    throw new InvalidOperationException($"Ürün bulunamadı veya aktif değil: {item.ProductId}");
-
+                var product = productsById[item.ProductId];
                 var unitPrice = product.SalePrice;
-                var lineTotal = item.Quantity * unitPrice;
+                var grossTotal = item.Quantity * unitPrice;
+
+                decimal itemDiscount = 0;
+                if (totalGrossAmount > 0 && request.DiscountAmount > 0)
+                {
+                    itemIndex++;
+                    if (itemIndex == totalItems)
+                    {
+                        // Yuvarlama kuruş farkını son kaleme yansıt
+                        itemDiscount = request.DiscountAmount - distributedDiscountSum;
+                    }
+                    else
+                    {
+                        itemDiscount = Math.Round(request.DiscountAmount * (grossTotal / totalGrossAmount), 2);
+                        distributedDiscountSum += itemDiscount;
+                    }
+                }
+
+                var lineTotal = grossTotal - itemDiscount;
 
                 sale.Items.Add(new SaleItem
                 {
@@ -93,7 +129,7 @@ public class PosService(IErpDbContext db) : IPosService
                     ProductId = item.ProductId,
                     Quantity = item.Quantity,
                     UnitPrice = unitPrice,
-                    DiscountAmount = 0,
+                    DiscountAmount = itemDiscount,
                     LineTotal = lineTotal
                 });
 
@@ -110,11 +146,11 @@ public class PosService(IErpDbContext db) : IPosService
                     CreatedAt = now
                 });
 
-                sale.TotalAmount += lineTotal;
+                sale.TotalAmount += grossTotal;
+                sale.DiscountAmount += itemDiscount;
             }
 
-            sale.DiscountAmount = 0;
-            sale.NetAmount = sale.TotalAmount;
+            sale.NetAmount = sale.TotalAmount - sale.DiscountAmount;
 
             db.Sales.Add(sale);
             await db.SaveChangesAsync(cancellationToken);

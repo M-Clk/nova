@@ -98,7 +98,10 @@ export function POSPage() {
   const [lastSale, setLastSale] = useState<PosCheckoutResult | null>(null);
   const [printReceipt, setPrintReceipt] = useState(false);
   const [receiptSale, setReceiptSale] = useState<SaleDto | null>(null);
+  const [discountType, setDiscountType] = useState<"percentage" | "amount">("amount");
+  const [discountValue, setDiscountValue] = useState<string>("");
   const barcodeRef = useRef<HTMLInputElement>(null);
+  const discountRef = useRef<HTMLInputElement>(null);
 
   const { data: terminals = [], isLoading: terminalsLoading } = useQuery({
     queryKey: ["pos-terminals"],
@@ -175,6 +178,10 @@ export function POSPage() {
       if (e.key === "F2") {
         e.preventDefault();
         barcodeRef.current?.focus();
+      } else if (e.key === "F3") {
+        e.preventDefault();
+        discountRef.current?.focus();
+        discountRef.current?.select();
       } else if (e.key === "Escape") {
         e.preventDefault();
         handleCancelSale();
@@ -200,6 +207,7 @@ export function POSPage() {
       setLastSale(result);
       clearCart();
       setBarcodeInput("");
+      setDiscountValue("");
       showSnack(`✓ Satış tamamlandı! Fiş No: ${result.saleNo}`, "success");
 
       // Eğer "Fiş Yaz" seçiliyse, tam satış verisini API'den çek ve modal aç
@@ -250,6 +258,7 @@ export function POSPage() {
     clearCart();
     setBarcodeInput("");
     setLastSale(null);
+    setDiscountValue("");
     barcodeRef.current?.focus();
   };
 
@@ -266,13 +275,25 @@ export function POSPage() {
       customerId: null,
       terminalId: selectedTerminalId,
       items: cart.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+      discountAmount: calculatedDiscount,
     });
   };
 
   // Totals
   const subtotal = cart.reduce((sum, i) => sum + i.lineTotal, 0);
-  const discount = 0;
-  const total = subtotal - discount;
+  
+  let calculatedDiscount = 0;
+  const parsedValue = parseFloat(discountValue) || 0;
+  if (parsedValue > 0) {
+    if (discountType === "percentage") {
+      calculatedDiscount = Math.round((subtotal * parsedValue) / 100 * 100) / 100;
+    } else {
+      calculatedDiscount = parsedValue;
+    }
+  }
+  calculatedDiscount = Math.min(calculatedDiscount, subtotal);
+
+  const total = subtotal - calculatedDiscount;
   const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   const selectedTerminal = terminals.find((t) => t.id === selectedTerminalId);
@@ -389,6 +410,7 @@ export function POSPage() {
           <Box sx={{ mt: 1.5, display: "flex", gap: 2, flexWrap: "wrap" }}>
             {[
               { key: "F2", label: "Barkoda Odaklan" },
+              { key: "F3", label: "İndirim Gir" },
               { key: "F12", label: "Ödeme Al" },
               { key: "ESC", label: "İptal Et" },
             ].map((shortcut) => (
@@ -643,8 +665,49 @@ export function POSPage() {
                 İndirim
               </Typography>
               <Typography variant="body2" fontWeight={600} color="success.main">
-                -{fmt(discount)}
+                -{fmt(calculatedDiscount)}
               </Typography>
+            </Box>
+
+            {/* İndirim Giriş Alanı */}
+            <Box sx={{ display: "flex", gap: 1.5, mt: 0.5, mb: 0.5 }}>
+              <TextField
+                inputRef={discountRef}
+                label="İndirim Girişi"
+                size="small"
+                value={discountValue}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                    setDiscountValue(val);
+                  }
+                }}
+                placeholder="0"
+                inputProps={{
+                  id: "pos-discount-input",
+                  style: { textAlign: "right", fontWeight: 700 }
+                }}
+                sx={{
+                  flex: 1,
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 2,
+                  }
+                }}
+              />
+              <Select
+                value={discountType}
+                onChange={(e) => setDiscountType(e.target.value as "percentage" | "amount")}
+                size="small"
+                id="pos-discount-type-select"
+                sx={{
+                  width: 80,
+                  borderRadius: 2,
+                  fontWeight: 700
+                }}
+              >
+                <MenuItem value="amount" sx={{ fontWeight: 700 }}>₺</MenuItem>
+                <MenuItem value="percentage" sx={{ fontWeight: 700 }}>%</MenuItem>
+              </Select>
             </Box>
 
             <Divider sx={{ my: 0.5 }} />
