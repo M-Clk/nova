@@ -348,20 +348,14 @@ export function SaleReceiptModal({ open, sale, onClose }: SaleReceiptModalProps)
 
           {/* Footer */}
           {company.receiptFooter && (
-            <Box sx={{ textAlign: "center", mt: 2 }}>
+            <Box sx={{ textAlign: "center", mt: 1.5 }}>
               <Divider sx={{ borderStyle: "dashed", mb: 1.5 }} />
-              <Typography sx={{ fontFamily: "inherit", fontSize: "0.78rem", opacity: 0.7 }}>
+              <Typography sx={{ fontFamily: "inherit", fontSize: "0.7rem", opacity: 0.5 }}>
                 {company.receiptFooter}
               </Typography>
             </Box>
           )}
 
-          {/* Alt bilgi — tarih damgası */}
-          <Box sx={{ textAlign: "center", mt: 1.5 }}>
-            <Typography sx={{ fontFamily: "inherit", fontSize: "0.7rem", opacity: 0.5 }}>
-              Bu belge bilgi amaçlıdır, resmi fatura yerine geçmez.
-            </Typography>
-          </Box>
         </Box>
       </DialogContent>
 
