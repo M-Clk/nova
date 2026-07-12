@@ -39,6 +39,7 @@ import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined
 import AdminPanelSettingsOutlinedIcon from "@mui/icons-material/AdminPanelSettingsOutlined";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
+import QrCodeScannerOutlinedIcon from "@mui/icons-material/QrCodeScannerOutlined";
 import { apiClient } from "../api/apiClient";
 import { useAuth } from "../auth/AuthContext";
 
@@ -90,13 +91,14 @@ const deleteUser = async (id: string): Promise<void> => {
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 
-const ROLES = ["Admin", "Manager", "Staff"] as const;
+const ROLES = ["Admin", "Manager", "Staff", "Kiosk"] as const;
 
 function RoleChip({ role }: { role: string }) {
-  const map: Record<string, { label: string; color: "error" | "warning" | "info"; icon: React.ReactNode }> = {
+  const map: Record<string, { label: string; color: "error" | "warning" | "info" | "success"; icon: React.ReactNode }> = {
     Admin: { label: "Admin", color: "error", icon: <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 14 }} /> },
     Manager: { label: "Yönetici", color: "warning", icon: <ManageAccountsOutlinedIcon sx={{ fontSize: 14 }} /> },
-    Staff: { label: "Personel", color: "info", icon: <BadgeOutlinedIcon sx={{ fontSize: 14 }} /> }
+    Staff: { label: "Personel", color: "info", icon: <BadgeOutlinedIcon sx={{ fontSize: 14 }} /> },
+    Kiosk: { label: "Kiosk", color: "success", icon: <QrCodeScannerOutlinedIcon sx={{ fontSize: 14 }} /> }
   };
   const cfg = map[role] ?? map["Staff"];
   return (

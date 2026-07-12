@@ -56,6 +56,7 @@ import { UsersPage } from "./pages/UsersPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SystemLogsPage } from "./pages/SystemLogsPage";
+import { KioskPage } from "./pages/KioskPage";
 import { AppThemeProvider, useThemeMode } from "./theme/ThemeContext";
 import "./styles.css";
 
@@ -71,10 +72,11 @@ const SIDEBAR_WIDTH = 260;
 // ─── Role badge helper ────────────────────────────────────────────────────────
 
 function RoleBadge({ role }: { role: string }) {
-  const config: Record<string, { label: string; color: "error" | "warning" | "info"; icon: React.ReactNode }> = {
+  const config: Record<string, { label: string; color: "error" | "warning" | "info" | "success"; icon: React.ReactNode }> = {
     Admin: { label: "Admin", color: "error", icon: <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 12 }} /> },
     Manager: { label: "Yönetici", color: "warning", icon: <ManageAccountsOutlinedIcon sx={{ fontSize: 12 }} /> },
-    Staff: { label: "Personel", color: "info", icon: <BadgeOutlinedIcon sx={{ fontSize: 12 }} /> }
+    Staff: { label: "Personel", color: "info", icon: <BadgeOutlinedIcon sx={{ fontSize: 12 }} /> },
+    Kiosk: { label: "Kiosk", color: "success", icon: <SupervisorAccountOutlinedIcon sx={{ fontSize: 12 }} /> }
   };
   const cfg = config[role] ?? config["Staff"];
 
@@ -91,10 +93,21 @@ function RoleBadge({ role }: { role: string }) {
 
 function AllowedRolesRoute({ roles, children }: { roles: string[]; children: React.ReactNode }) {
   const { user } = useAuth();
-  if (!user || !roles.includes(user.role)) {
+  // Kiosk kullanıcısı hiçbir zaman normal sayfalara erişemez
+  if (!user || !roles.includes(user.role) || user.role === "Kiosk") {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
+}
+
+// ─── Kiosk Layout (sidebar/navbar yok, tam ekran) ─────────────────────────────
+
+function KioskLayout() {
+  const { user } = useAuth();
+  if (user?.role !== "Kiosk") {
+    return <Navigate to="/" replace />;
+  }
+  return <Outlet />;
 }
 
 // ─── Navigation Content ───────────────────────────────────────────────────────
@@ -365,6 +378,13 @@ function App() {
 
                 {/* Protected routes — JWT zorunlu */}
                 <Route element={<PrivateRoute />}>
+
+                  {/* Kiosk rotası — sidebar/navbar yok */}
+                  <Route element={<KioskLayout />}>
+                    <Route path="kiosk" element={<KioskPage />} />
+                  </Route>
+
+                  {/* Normal uygulama rotaları */}
                   <Route element={<MainLayout />}>
                     <Route index element={<DashboardPage />} />
                     <Route path="products" element={<ProductsPage />} />

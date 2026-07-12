@@ -40,8 +40,13 @@ export function LoginPage() {
     setError(null);
 
     try {
-      await login(username.trim(), password);
-      navigate(from, { replace: true });
+      const loggedInUser = await login(username.trim(), password);
+      // Kiosk rolü doğrudan kiosk ekranına yönlendirilir
+      if (loggedInUser?.role === "Kiosk") {
+        navigate("/kiosk", { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
       setError(

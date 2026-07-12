@@ -3,7 +3,7 @@ import { useAuth } from "./AuthContext";
 import { Box, CircularProgress } from "@mui/material";
 
 export function PrivateRoute() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -24,6 +24,16 @@ export function PrivateRoute() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Kiosk rolü: sadece /kiosk rotasına izin ver
+  if (user?.role === "Kiosk" && location.pathname !== "/kiosk") {
+    return <Navigate to="/kiosk" replace />;
+  }
+
+  // Diğer roller: /kiosk rotasına erişimi engelle
+  if (user?.role !== "Kiosk" && location.pathname === "/kiosk") {
+    return <Navigate to="/" replace />;
   }
 
   return <Outlet />;

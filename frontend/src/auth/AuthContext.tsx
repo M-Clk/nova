@@ -12,7 +12,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<AuthUser | null>;
   logout: () => Promise<void>;
 }
 
@@ -22,7 +22,7 @@ export const AuthContext = createContext<AuthContextValue>({
   user: null,
   isAuthenticated: false,
   isLoading: true,
-  login: async () => {},
+  login: async () => null,
   logout: async () => {}
 });
 
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string): Promise<AuthUser | null> => {
     const { data } = await apiClient.post("/auth/login", { username, password });
     const { accessToken, refreshToken } = data;
 
@@ -80,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const parsedUser = buildUserFromToken(accessToken);
     setUser(parsedUser);
+    return parsedUser;
   }, []);
 
   const logout = useCallback(async () => {
