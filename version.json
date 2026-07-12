@@ -1,5 +1,5 @@
 {
-  "version": "1.2.4",
-  "releaseNotes": "Pos kasasi ekraninda barkod auto focus yapilamamasi hatasi giderildi.",
+  "version": "1.2.5",
+  "releaseNotes": "Makbuz yazdırma özelliği eklendi. POS Kasası ekranına indirim girme alanı eklendi. Stok ekrani ui iyilestirildi.",
   "releaseDate": "2026-07-12"
 }

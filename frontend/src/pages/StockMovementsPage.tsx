@@ -5,7 +5,7 @@ import {
   Button, TextField, MenuItem, Collapse, Alert, Snackbar,
   Autocomplete, InputAdornment, IconButton,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
-  TablePagination
+  TablePagination, Tabs, Tab
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
@@ -13,6 +13,8 @@ import WarehouseIcon from "@mui/icons-material/Warehouse";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import ClearIcon from "@mui/icons-material/Clear";
 import SearchIcon from "@mui/icons-material/Search";
+import HistoryIcon from "@mui/icons-material/History";
+import InventoryIcon from "@mui/icons-material/Inventory";
 import { apiClient } from "../api/apiClient";
 import {
   CurrentStockDto, StockMovementDto, ProductDto,
@@ -46,6 +48,10 @@ export function StockMovementsPage() {
   const { user } = useAuth();
   const canManage = user?.role === "Admin" || user?.role === "Manager";
   const queryClient = useQueryClient();
+
+  // Active tab: 0 = Stok Hareketleri, 1 = Güncel Stok
+  const [activeTab, setActiveTab] = useState(0);
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [barcodeSearch, setBarcodeSearch] = useState("");
   const [snack, setSnack] = useState<{ open: boolean; message: string; severity: "success" | "error" | "warning" }>({
@@ -94,12 +100,12 @@ export function StockMovementsPage() {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "F2") {
         e.preventDefault();
-        // Automatically open the form if it's closed, then focus
+        // Switch to movements tab and open the form
+        setActiveTab(0);
         setIsFormOpen(true);
-        // We wait a tiny bit for the Collapse animation or element render to complete if it's opening
         setTimeout(() => {
           barcodeInputRef.current?.focus();
-        }, 100);
+        }, 150);
       }
     };
     window.addEventListener("keydown", handleKey);
@@ -364,558 +370,619 @@ export function StockMovementsPage() {
   };
 
   return (
-    <Stack spacing={4}>
-      {/* ── Current Stock ── */}
-      <Box>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
-          <Box>
-            <Typography variant="h5" fontWeight={800}>Güncel Stok Seviyeleri</Typography>
-            <Typography color="text.secondary" variant="body2">
-              Depolarınızdaki anlık stok miktarları
-            </Typography>
-          </Box>
-          {canManage && (
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={isFormOpen ? <CloseIcon /> : <AddIcon />}
-              onClick={() => setIsFormOpen(o => !o)}
-            >
-              {isFormOpen ? "Vazgeç" : "Stok Hareketi Ekle"}
-            </Button>
+    <Stack spacing={3}>
+      {/* ── Page Header ── */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <Box>
+          <Typography variant="h5" fontWeight={800}>Stok Hareketleri</Typography>
+          <Typography color="text.secondary" variant="body2">
+            Stok hareketlerini ve anlık envanter seviyelerini yönetin
+          </Typography>
+        </Box>
+        {/* "Stok Hareketi Ekle" button — only visible on movements tab */}
+        {canManage && activeTab === 0 && (
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={isFormOpen ? <CloseIcon /> : <AddIcon />}
+            onClick={() => setIsFormOpen(o => !o)}
+          >
+            {isFormOpen ? "Vazgeç" : "Stok Hareketi Ekle"}
+          </Button>
+        )}
+      </Box>
+
+      {/* ── Tab Navigation ── */}
+      <Paper sx={{ borderRadius: 2 }} elevation={0} variant="outlined">
+        <Tabs
+          value={activeTab}
+          onChange={(_, newVal) => {
+            setActiveTab(newVal);
+            // Close the form when switching away from movements tab
+            if (newVal !== 0) setIsFormOpen(false);
+          }}
+          sx={{
+            px: 2,
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            "& .MuiTab-root": { fontWeight: 600, textTransform: "none", minHeight: 52 }
+          }}
+        >
+          <Tab
+            id="tab-movements"
+            aria-controls="tabpanel-movements"
+            icon={<HistoryIcon fontSize="small" />}
+            iconPosition="start"
+            label="Stok Hareketleri"
+          />
+          <Tab
+            id="tab-current-stock"
+            aria-controls="tabpanel-current-stock"
+            icon={<InventoryIcon fontSize="small" />}
+            iconPosition="start"
+            label="Güncel Stok Seviyeleri"
+          />
+        </Tabs>
+
+        {/* ── Tab Panel: Stok Hareketleri ── */}
+        <Box
+          role="tabpanel"
+          id="tabpanel-movements"
+          aria-labelledby="tab-movements"
+          hidden={activeTab !== 0}
+          sx={{ p: 2.5 }}
+        >
+          {activeTab === 0 && (
+            <>
+              <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+                Tüm stok işlemlerinin geçmiş kaydı &nbsp;·&nbsp; F2 ile hızlı giriş formu açılır
+              </Typography>
+
+              {/* Stock Entry Form */}
+              <Collapse in={isFormOpen}>
+                <Paper
+                  component="form"
+                  onSubmit={submit}
+                  sx={{ p: 3, borderRadius: 2, mb: 3, border: "1px solid", borderColor: "primary.main", bgcolor: "action.hover" }}
+                  elevation={0}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
+                    <WarehouseIcon color="primary" />
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      Yeni Stok Hareketi
+                    </Typography>
+                    <Chip
+                      label="Yalnızca giriş tipleri"
+                      size="small"
+                      color="info"
+                      variant="outlined"
+                      sx={{ ml: 1, fontSize: "0.7rem" }}
+                    />
+                  </Box>
+
+                  <Grid container spacing={2.5}>
+                    {/* Barcode Scan Field */}
+                    <Grid item xs={12} sm={6} md={4}>
+                      <TextField
+                        inputRef={barcodeInputRef}
+                        label="Barkod Okutun"
+                        placeholder="Barkod okutup Enter'a basın..."
+                        value={barcodeSearch}
+                        onChange={e => setBarcodeSearch(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleBarcodeScan(barcodeSearch);
+                          }
+                        }}
+                        fullWidth
+                        size="small"
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <QrCodeScannerIcon color="primary" fontSize="small" />
+                            </InputAdornment>
+                          ),
+                          endAdornment: barcodeSearch ? (
+                            <InputAdornment position="end">
+                              <IconButton size="small" onClick={() => setBarcodeSearch("")}>
+                                <ClearIcon fontSize="small" />
+                              </IconButton>
+                            </InputAdornment>
+                          ) : null,
+                        }}
+                      />
+                    </Grid>
+
+                    {/* Product Search (Autocomplete) */}
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Autocomplete
+                        options={products.data ?? []}
+                        getOptionLabel={(option) => `${option.code} — ${option.name} (${option.barcode})`}
+                        filterOptions={(options, state) => {
+                          const search = state.inputValue.toLowerCase().trim();
+                          if (!search) return options.slice(0, 50);
+                          return options
+                            .filter(
+                              (o) =>
+                                o.name.toLowerCase().includes(search) ||
+                                o.code.toLowerCase().includes(search) ||
+                                o.barcode.toLowerCase().includes(search)
+                            )
+                            .slice(0, 50); // Limit to 50 options to prevent lag
+                        }}
+                        value={selectedProduct || null}
+                        onChange={(_, newValue) => {
+                          if (newValue) {
+                            handleProductChange(newValue.id);
+                          } else {
+                            setForm(f => ({ ...f, productId: "", unitPrice: 0 }));
+                          }
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Ürün Seç / Ara"
+                            placeholder="Ürün adı veya kod yazın..."
+                            size="small"
+                            required
+                          />
+                        )}
+                        noOptionsText="Ürün bulunamadı"
+                      />
+                    </Grid>
+
+                    {/* Warehouse */}
+                    <Grid item xs={12} sm={6} md={4}>
+                      <TextField
+                        select
+                        label="Depo"
+                        value={form.warehouseId}
+                        onChange={e => setForm(f => ({ ...f, warehouseId: e.target.value }))}
+                        required
+                        fullWidth
+                        size="small"
+                      >
+                        {(references.data?.warehouses ?? []).map(w => (
+                          <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+
+                    {/* Movement Type */}
+                    <Grid item xs={12} sm={6} md={4}>
+                      <TextField
+                        select
+                        label="Hareket Tipi"
+                        value={form.type}
+                        onChange={e => setForm(f => ({ ...f, type: Number(e.target.value) }))}
+                        required
+                        fullWidth
+                        size="small"
+                      >
+                        {MANUAL_MOVEMENT_TYPES.map(t => (
+                          <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+
+                    {/* Quantity */}
+                    <Grid item xs={12} sm={3} md={4}>
+                      <TextField
+                        label="Miktar"
+                        type="number"
+                        value={form.quantity}
+                        onChange={e => setForm(f => ({ ...f, quantity: Math.max(0.01, Number(e.target.value)) }))}
+                        required
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0.01, step: 0.01 }}
+                        inputRef={quantityRef}
+                      />
+                    </Grid>
+
+                    {/* Unit Price */}
+                    <Grid item xs={12} sm={3} md={4}>
+                      <TextField
+                        label="Birim Fiyat (₺)"
+                        type="number"
+                        value={form.unitPrice}
+                        onChange={e => setForm(f => ({ ...f, unitPrice: Math.max(0, Number(e.target.value)) }))}
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0, step: 0.01 }}
+                        helperText={selectedProduct ? `Alış: ₺${selectedProduct.purchasePrice.toFixed(2)}` : ""}
+                      />
+                    </Grid>
+                  </Grid>
+
+                  {/* Preview */}
+                  {form.productId && form.warehouseId && (
+                    <Box
+                      sx={{
+                        mt: 2.5, p: 2, borderRadius: 1.5,
+                        bgcolor: "background.paper",
+                        border: "1px dashed", borderColor: "divider",
+                        display: "flex", justifyContent: "space-between",
+                        alignItems: "center", flexWrap: "wrap", gap: 2
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        Ürün: <strong>{selectedProduct?.name}</strong> &nbsp;|&nbsp;
+                        Tip: <strong>{MANUAL_MOVEMENT_TYPES.find(t => t.value === form.type)?.label}</strong> &nbsp;|&nbsp;
+                        Miktar: <strong>{form.quantity}</strong>
+                      </Typography>
+                      <Typography variant="h6" fontWeight={800} color="success.main">
+                        Toplam: {fmt(form.quantity * form.unitPrice)}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  <Box sx={{ mt: 2.5, display: "flex", justifyContent: "flex-end", gap: 1 }}>
+                    <Button variant="outlined" onClick={() => setIsFormOpen(false)}>
+                      Vazgeç
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      color="success"
+                      disabled={addMovement.isPending || !form.productId || !form.warehouseId}
+                      startIcon={<AddIcon />}
+                    >
+                      {addMovement.isPending ? "Kaydediliyor..." : "Stok Hareketi Kaydet"}
+                    </Button>
+                  </Box>
+                </Paper>
+              </Collapse>
+
+              {/* Ledger Filters */}
+              <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }} elevation={0} variant="outlined">
+                <Grid container spacing={2} alignItems="center">
+                  {/* Barcode Search */}
+                  <Grid item xs={12} sm={6} md={2.5}>
+                    <TextField
+                      label="Barkod Ara"
+                      placeholder="Barkod yazıp Enter'a basın…"
+                      value={movementBarcodeVal}
+                      onChange={e => setMovementBarcodeVal(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          setMovementBarcodeSearch(movementBarcodeVal);
+                        }
+                      }}
+                      size="small"
+                      fullWidth
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <QrCodeScannerIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: movementBarcodeVal ? (
+                          <InputAdornment position="end">
+                            <IconButton size="small" onClick={() => {
+                              setMovementBarcodeVal("");
+                              setMovementBarcodeSearch("");
+                            }}>
+                              <ClearIcon fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null,
+                      }}
+                    />
+                  </Grid>
+                  {/* Product Name Search */}
+                  <Grid item xs={12} sm={6} md={2.5}>
+                    <TextField
+                      label="Ürün İsmi"
+                      placeholder="Ürün ismi yazıp Enter'a basın…"
+                      value={movementNameVal}
+                      onChange={e => setMovementNameVal(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          setMovementNameSearch(movementNameVal);
+                        }
+                      }}
+                      size="small"
+                      fullWidth
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: movementNameVal ? (
+                          <InputAdornment position="end">
+                            <IconButton size="small" onClick={() => {
+                              setMovementNameVal("");
+                              setMovementNameSearch("");
+                            }}>
+                              <ClearIcon fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null,
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={2}>
+                    <TextField
+                      select
+                      label="Depo"
+                      value={movementWarehouse}
+                      onChange={e => setMovementWarehouse(e.target.value)}
+                      size="small"
+                      fullWidth
+                    >
+                      <MenuItem value=""><em>Tüm Depolar</em></MenuItem>
+                      {(references.data?.warehouses ?? []).map(w => (
+                        <MenuItem key={w.id} value={w.name}>{w.name}</MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={2}>
+                    <TextField
+                      select
+                      label="Hareket Tipi"
+                      value={movementType}
+                      onChange={e => setMovementType(e.target.value)}
+                      size="small"
+                      fullWidth
+                    >
+                      <MenuItem value="all">Tümü (Tip)</MenuItem>
+                      {ALL_MOVEMENT_TYPES.map(t => (
+                        <MenuItem key={t.value} value={String(t.value)}>{t.label}</MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={2}>
+                    <TextField
+                      select
+                      label="Durum"
+                      value={movementStatus}
+                      onChange={e => setMovementStatus(e.target.value)}
+                      size="small"
+                      fullWidth
+                    >
+                      <MenuItem value="all">Tümü (Durum)</MenuItem>
+                      <MenuItem value="normal">Normal</MenuItem>
+                      <MenuItem value="cancelled">İptal Edilmiş</MenuItem>
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={1} sx={{ display: "flex", justifyContent: "flex-end" }}>
+                    {(movementBarcodeVal || movementNameVal || movementWarehouse || movementType !== "all" || movementStatus !== "all") && (
+                      <Button
+                        variant="text"
+                        size="small"
+                        startIcon={<ClearIcon />}
+                        onClick={handleClearMovementFilters}
+                        sx={{ textTransform: "none" }}
+                      >
+                        Temizle
+                      </Button>
+                    )}
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              <DataTable
+                isLoading={movements.isLoading}
+                columns={canManage ? ["Barkod", "Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih", "İşlemler"] : ["Barkod", "Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih"]}
+                rows={(movements.data?.items ?? []).map(m => {
+                  const isManual = m.referenceType === "MANUAL";
+                  const row = [
+                    renderCell(m.productBarcode || <span style={{ opacity: 0.5 }}>—</span>, m.isCancelled),
+                    renderCell(<Typography variant="body2" fontWeight={700} color="primary.main">{m.productCode}</Typography>, m.isCancelled, true),
+                    renderCell(m.productName, m.isCancelled),
+                    renderCell(m.warehouseName, m.isCancelled),
+                    m.isCancelled ? (
+                      <Chip label="İptal Edildi" color="default" size="small" sx={{ fontWeight: 600, minWidth: 110, textDecoration: "line-through" }} />
+                    ) : (
+                      getMovementTypeBadge(m.type)
+                    ),
+                    formatQuantity(m.type, m.quantity, m.isCancelled),
+                    renderCell(fmt(m.unitPrice), m.isCancelled),
+                    m.isCancelled ? (
+                      <Chip label="İptal" size="small" variant="outlined" color="error" sx={{ fontSize: "0.7rem" }} />
+                    ) : m.referenceType ? (
+                      <Chip label={m.referenceType} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                    ) : (
+                      <span style={{ opacity: 0.5 }}>—</span>
+                    ),
+                    renderCell(new Date(m.createdAt).toLocaleString("tr-TR"), m.isCancelled)
+                  ];
+                  if (canManage) {
+                    row.push(
+                      !m.isCancelled && isManual ? (
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          onClick={() => setCancelTargetId(m.id)}
+                          disabled={cancelMovement.isPending}
+                        >
+                          İptal Et
+                        </Button>
+                      ) : ("")
+                    );
+                  }
+                  return row;
+                })}
+              />
+
+              <TablePagination
+                rowsPerPageOptions={[10, 25, 50, 100]}
+                component="div"
+                count={movements.data?.totalCount ?? 0}
+                rowsPerPage={movementRowsPerPage}
+                page={movementPage}
+                onPageChange={(_, newPage) => setMovementPage(newPage)}
+                onRowsPerPageChange={(e) => {
+                  setMovementRowsPerPage(parseInt(e.target.value, 10));
+                  setMovementPage(0);
+                }}
+                labelRowsPerPage="Sayfa başına satır:"
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
+              />
+            </>
           )}
         </Box>
 
-        {/* Stock Entry Form */}
-        <Collapse in={isFormOpen}>
-          <Paper component="form" onSubmit={submit} sx={{ p: 3, borderRadius: 2, mb: 3 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
-              <WarehouseIcon color="primary" />
-              <Typography variant="subtitle1" fontWeight={700}>
-                Yeni Stok Hareketi
+        {/* ── Tab Panel: Güncel Stok ── */}
+        <Box
+          role="tabpanel"
+          id="tabpanel-current-stock"
+          aria-labelledby="tab-current-stock"
+          hidden={activeTab !== 1}
+          sx={{ p: 2.5 }}
+        >
+          {activeTab === 1 && (
+            <>
+              <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+                Depolarınızdaki anlık stok miktarları
               </Typography>
-              <Chip
-                label="Yalnızca giriş tipleri"
-                size="small"
-                color="info"
-                variant="outlined"
-                sx={{ ml: 1, fontSize: "0.7rem" }}
-              />
-            </Box>
 
-            <Grid container spacing={2.5}>
-              {/* Barcode Scan Field */}
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  inputRef={barcodeInputRef}
-                  label="Barkod Okutun"
-                  placeholder="Barkod okutup Enter'a basın..."
-                  value={barcodeSearch}
-                  onChange={e => setBarcodeSearch(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleBarcodeScan(barcodeSearch);
-                    }
-                  }}
-                  fullWidth
-                  size="small"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <QrCodeScannerIcon color="primary" fontSize="small" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: barcodeSearch ? (
-                      <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => setBarcodeSearch("")}>
-                          <ClearIcon fontSize="small" />
-                        </IconButton>
-                      </InputAdornment>
-                    ) : null,
-                  }}
-                />
-              </Grid>
-
-              {/* Product Search (Autocomplete) */}
-              <Grid item xs={12} sm={6} md={4}>
-                <Autocomplete
-                  options={products.data ?? []}
-                  getOptionLabel={(option) => `${option.code} — ${option.name} (${option.barcode})`}
-                  filterOptions={(options, state) => {
-                    const search = state.inputValue.toLowerCase().trim();
-                    if (!search) return options.slice(0, 50);
-                    return options
-                      .filter(
-                        (o) =>
-                          o.name.toLowerCase().includes(search) ||
-                          o.code.toLowerCase().includes(search) ||
-                          o.barcode.toLowerCase().includes(search)
-                      )
-                      .slice(0, 50); // Limit to 50 options to prevent lag
-                  }}
-                  value={selectedProduct || null}
-                  onChange={(_, newValue) => {
-                    if (newValue) {
-                      handleProductChange(newValue.id);
-                    } else {
-                      setForm(f => ({ ...f, productId: "", unitPrice: 0 }));
-                    }
-                  }}
-                  renderInput={(params) => (
+              {/* Current Stock Filters */}
+              <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }} elevation={0} variant="outlined">
+                <Grid container spacing={2} alignItems="center">
+                  {/* Barcode Search */}
+                  <Grid item xs={12} sm={6} md={4}>
                     <TextField
-                      {...params}
-                      label="Ürün Seç / Ara"
-                      placeholder="Ürün adı veya kod yazın..."
+                      label="Barkod Ara"
+                      placeholder="Barkod yazıp Enter'a basın…"
+                      value={currentBarcodeVal}
+                      onChange={e => setCurrentBarcodeVal(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          setCurrentBarcodeSearch(currentBarcodeVal);
+                        }
+                      }}
                       size="small"
-                      required
+                      fullWidth
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <QrCodeScannerIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: currentBarcodeVal ? (
+                          <InputAdornment position="end">
+                            <IconButton size="small" onClick={() => {
+                              setCurrentBarcodeVal("");
+                              setCurrentBarcodeSearch("");
+                            }}>
+                              <ClearIcon fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null,
+                      }}
                     />
-                  )}
-                  noOptionsText="Ürün bulunamadı"
-                />
-              </Grid>
+                  </Grid>
+                  {/* Product Name Search */}
+                  <Grid item xs={12} sm={6} md={4}>
+                    <TextField
+                      label="Ürün İsmi"
+                      placeholder="Ürün ismi yazıp Enter'a basın…"
+                      value={currentNameVal}
+                      onChange={e => setCurrentNameVal(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          setCurrentNameSearch(currentNameVal);
+                        }
+                      }}
+                      size="small"
+                      fullWidth
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: currentNameVal ? (
+                          <InputAdornment position="end">
+                            <IconButton size="small" onClick={() => {
+                              setCurrentNameVal("");
+                              setCurrentNameSearch("");
+                            }}>
+                              <ClearIcon fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null,
+                      }}
+                    />
+                  </Grid>
+                  {/* Warehouse Select */}
+                  <Grid item xs={12} sm={6} md={2.5}>
+                    <TextField
+                      select
+                      label="Depo"
+                      value={currentWarehouse}
+                      onChange={e => setCurrentWarehouse(e.target.value)}
+                      size="small"
+                      fullWidth
+                    >
+                      <MenuItem value=""><em>Tüm Depolar</em></MenuItem>
+                      {(references.data?.warehouses ?? []).map(w => (
+                        <MenuItem key={w.id} value={w.name}>{w.name}</MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  {/* Clear Button */}
+                  <Grid item xs={12} sm={6} md={1.5} sx={{ display: "flex", justifyContent: "flex-end" }}>
+                    {(currentBarcodeVal || currentNameVal || currentWarehouse) && (
+                      <Button
+                        variant="text"
+                        size="small"
+                        startIcon={<ClearIcon />}
+                        onClick={handleClearCurrentFilters}
+                        sx={{ textTransform: "none" }}
+                      >
+                        Temizle
+                      </Button>
+                    )}
+                  </Grid>
+                </Grid>
+              </Paper>
 
-              {/* Warehouse */}
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  select
-                  label="Depo"
-                  value={form.warehouseId}
-                  onChange={e => setForm(f => ({ ...f, warehouseId: e.target.value }))}
-                  required
-                  fullWidth
-                  size="small"
-                >
-                  {(references.data?.warehouses ?? []).map(w => (
-                    <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-
-              {/* Movement Type */}
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  select
-                  label="Hareket Tipi"
-                  value={form.type}
-                  onChange={e => setForm(f => ({ ...f, type: Number(e.target.value) }))}
-                  required
-                  fullWidth
-                  size="small"
-                >
-                  {MANUAL_MOVEMENT_TYPES.map(t => (
-                    <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-
-              {/* Quantity */}
-              <Grid item xs={12} sm={3} md={4}>
-                <TextField
-                  label="Miktar"
-                  type="number"
-                  value={form.quantity}
-                  onChange={e => setForm(f => ({ ...f, quantity: Math.max(0.01, Number(e.target.value)) }))}
-                  required
-                  fullWidth
-                  size="small"
-                  inputProps={{ min: 0.01, step: 0.01 }}
-                  inputRef={quantityRef}
-                />
-              </Grid>
-
-              {/* Unit Price */}
-              <Grid item xs={12} sm={3} md={4}>
-                <TextField
-                  label="Birim Fiyat (₺)"
-                  type="number"
-                  value={form.unitPrice}
-                  onChange={e => setForm(f => ({ ...f, unitPrice: Math.max(0, Number(e.target.value)) }))}
-                  fullWidth
-                  size="small"
-                  inputProps={{ min: 0, step: 0.01 }}
-                  helperText={selectedProduct ? `Alış: ₺${selectedProduct.purchasePrice.toFixed(2)}` : ""}
-                />
-              </Grid>
-            </Grid>
-
-            {/* Preview */}
-            {form.productId && form.warehouseId && (
-              <Box
-                sx={{
-                  mt: 2.5, p: 2, borderRadius: 1.5,
-                  bgcolor: "action.hover",
-                  border: "1px dashed", borderColor: "divider",
-                  display: "flex", justifyContent: "space-between",
-                  alignItems: "center", flexWrap: "wrap", gap: 2
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  Ürün: <strong>{selectedProduct?.name}</strong> &nbsp;|&nbsp;
-                  Tip: <strong>{MANUAL_MOVEMENT_TYPES.find(t => t.value === form.type)?.label}</strong> &nbsp;|&nbsp;
-                  Miktar: <strong>{form.quantity}</strong>
-                </Typography>
-                <Typography variant="h6" fontWeight={800} color="success.main">
-                  Toplam: {fmt(form.quantity * form.unitPrice)}
-                </Typography>
-              </Box>
-            )}
-
-            <Box sx={{ mt: 2.5, display: "flex", justifyContent: "flex-end", gap: 1 }}>
-              <Button variant="outlined" onClick={() => setIsFormOpen(false)}>
-                Vazgeç
-              </Button>
-              <Button
-                type="submit"
-                variant="contained"
-                color="success"
-                disabled={addMovement.isPending || !form.productId || !form.warehouseId}
-                startIcon={<AddIcon />}
-              >
-                {addMovement.isPending ? "Kaydediliyor..." : "Stok Hareketi Kaydet"}
-              </Button>
-            </Box>
-          </Paper>
-        </Collapse>
-
-        {/* Current Stock Filters */}
-        <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-          <Grid container spacing={2} alignItems="center">
-            {/* Barcode Search */}
-            <Grid item xs={12} sm={6} md={4}>
-              <TextField
-                label="Barkod Ara"
-                placeholder="Barkod yazıp Enter'a basın…"
-                value={currentBarcodeVal}
-                onChange={e => setCurrentBarcodeVal(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    setCurrentBarcodeSearch(currentBarcodeVal);
-                  }
-                }}
-                size="small"
-                fullWidth
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <QrCodeScannerIcon fontSize="small" sx={{ color: "text.disabled" }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: currentBarcodeVal ? (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => {
-                        setCurrentBarcodeVal("");
-                        setCurrentBarcodeSearch("");
-                      }}>
-                        <ClearIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ) : null,
-                }}
-              />
-            </Grid>
-            {/* Product Name Search */}
-            <Grid item xs={12} sm={6} md={4}>
-              <TextField
-                label="Ürün İsmi"
-                placeholder="Ürün ismi yazıp Enter'a basın…"
-                value={currentNameVal}
-                onChange={e => setCurrentNameVal(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    setCurrentNameSearch(currentNameVal);
-                  }
-                }}
-                size="small"
-                fullWidth
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" sx={{ color: "text.disabled" }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: currentNameVal ? (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => {
-                        setCurrentNameVal("");
-                        setCurrentNameSearch("");
-                      }}>
-                        <ClearIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ) : null,
-                }}
-              />
-            </Grid>
-            {/* Warehouse Select */}
-            <Grid item xs={12} sm={6} md={2.5}>
-              <TextField
-                select
-                label="Depo"
-                value={currentWarehouse}
-                onChange={e => setCurrentWarehouse(e.target.value)}
-                size="small"
-                fullWidth
-              >
-                <MenuItem value=""><em>Tüm Depolar</em></MenuItem>
-                {(references.data?.warehouses ?? []).map(w => (
-                  <MenuItem key={w.id} value={w.name}>{w.name}</MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            {/* Clear Button */}
-            <Grid item xs={12} sm={6} md={1.5} sx={{ display: "flex", justifyContent: "flex-end" }}>
-              {(currentBarcodeVal || currentNameVal || currentWarehouse) && (
-                <Button 
-                  variant="text" 
-                  size="small" 
-                  startIcon={<ClearIcon />} 
-                  onClick={handleClearCurrentFilters}
-                  sx={{ textTransform: "none" }}
-                >
-                  Temizle
-                </Button>
-              )}
-            </Grid>
-          </Grid>
-        </Paper>
-
-        <DataTable
-          isLoading={current.isLoading}
-          columns={["Barkod", "Ürün Kodu", "Ürün Adı", "Depo Adı", "Mevcut Miktar"]}
-          rows={filteredCurrent.map(s => [
-            s.productBarcode || <span style={{ opacity: 0.5 }}>—</span>,
-            <Typography variant="body2" fontWeight={700} color="primary.main">{s.productCode}</Typography>,
-            s.productName,
-            s.warehouseName,
-            <Typography
-              variant="body2"
-              fontWeight={700}
-              color={s.quantity <= 0 ? "error.main" : "text.primary"}
-            >
-              {s.quantity.toFixed(2)}
-            </Typography>
-          ])}
-        />
-
-        <TablePagination
-          rowsPerPageOptions={[10, 25, 50, 100]}
-          component="div"
-          count={current.data?.totalCount ?? 0}
-          rowsPerPage={currentRowsPerPage}
-          page={currentPage}
-          onPageChange={(_, newPage) => setCurrentPage(newPage)}
-          onRowsPerPageChange={(e) => {
-            setCurrentRowsPerPage(parseInt(e.target.value, 10));
-            setCurrentPage(0);
-          }}
-          labelRowsPerPage="Sayfa başına satır:"
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
-        />
-      </Box>
-
-      {/* ── Stock Movements Ledger ── */}
-      <Box>
-        <Typography variant="h5" fontWeight={800} sx={{ mb: 1 }}>
-          Stok Hareket Defteri
-        </Typography>
-        <Typography color="text.secondary" variant="body2" sx={{ mb: 2.5 }}>
-          Tüm stok işlemlerinin geçmiş kaydı
-        </Typography>
-
-        {/* Ledger Filters */}
-        <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-          <Grid container spacing={2} alignItems="center">
-            {/* Barcode Search */}
-            <Grid item xs={12} sm={6} md={2.5}>
-              <TextField
-                label="Barkod Ara"
-                placeholder="Barkod yazıp Enter'a basın…"
-                value={movementBarcodeVal}
-                onChange={e => setMovementBarcodeVal(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    setMovementBarcodeSearch(movementBarcodeVal);
-                  }
-                }}
-                size="small"
-                fullWidth
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <QrCodeScannerIcon fontSize="small" sx={{ color: "text.disabled" }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: movementBarcodeVal ? (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => {
-                        setMovementBarcodeVal("");
-                        setMovementBarcodeSearch("");
-                      }}>
-                        <ClearIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ) : null,
-                }}
-              />
-            </Grid>
-            {/* Product Name Search */}
-            <Grid item xs={12} sm={6} md={2.5}>
-              <TextField
-                label="Ürün İsmi"
-                placeholder="Ürün ismi yazıp Enter'a basın…"
-                value={movementNameVal}
-                onChange={e => setMovementNameVal(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    setMovementNameSearch(movementNameVal);
-                  }
-                }}
-                size="small"
-                fullWidth
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" sx={{ color: "text.disabled" }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: movementNameVal ? (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => {
-                        setMovementNameVal("");
-                        setMovementNameSearch("");
-                      }}>
-                        <ClearIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ) : null,
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                select
-                label="Depo"
-                value={movementWarehouse}
-                onChange={e => setMovementWarehouse(e.target.value)}
-                size="small"
-                fullWidth
-              >
-                <MenuItem value=""><em>Tüm Depolar</em></MenuItem>
-                {(references.data?.warehouses ?? []).map(w => (
-                  <MenuItem key={w.id} value={w.name}>{w.name}</MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                select
-                label="Hareket Tipi"
-                value={movementType}
-                onChange={e => setMovementType(e.target.value)}
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="all">Tümü (Tip)</MenuItem>
-                {ALL_MOVEMENT_TYPES.map(t => (
-                  <MenuItem key={t.value} value={String(t.value)}>{t.label}</MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                select
-                label="Durum"
-                value={movementStatus}
-                onChange={e => setMovementStatus(e.target.value)}
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="all">Tümü (Durum)</MenuItem>
-                <MenuItem value="normal">Normal</MenuItem>
-                <MenuItem value="cancelled">İptal Edilmiş</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12} sm={12} md={1} sx={{ display: "flex", justifyContent: "flex-end" }}>
-              {(movementBarcodeVal || movementNameVal || movementWarehouse || movementType !== "all" || movementStatus !== "all") && (
-                <Button 
-                  variant="text" 
-                  size="small" 
-                  startIcon={<ClearIcon />} 
-                  onClick={handleClearMovementFilters}
-                  sx={{ textTransform: "none" }}
-                >
-                  Temizle
-                </Button>
-              )}
-            </Grid>
-          </Grid>
-        </Paper>
-
-        <DataTable
-          isLoading={movements.isLoading}
-          columns={canManage ? ["Barkod", "Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih", "İşlemler"] : ["Barkod", "Ürün Kodu", "Ürün Adı", "Depo", "Hareket Tipi", "Miktar", "Birim Fiyat", "Referans", "Tarih"]}
-          rows={(movements.data?.items ?? []).map(m => {
-            const isManual = m.referenceType === "MANUAL";
-            const row = [
-              renderCell(m.productBarcode || <span style={{ opacity: 0.5 }}>—</span>, m.isCancelled),
-              renderCell(<Typography variant="body2" fontWeight={700} color="primary.main">{m.productCode}</Typography>, m.isCancelled, true),
-              renderCell(m.productName, m.isCancelled),
-              renderCell(m.warehouseName, m.isCancelled),
-              m.isCancelled ? (
-                <Chip label="İptal Edildi" color="default" size="small" sx={{ fontWeight: 600, minWidth: 110, textDecoration: "line-through" }} />
-              ) : (
-                getMovementTypeBadge(m.type)
-              ),
-              formatQuantity(m.type, m.quantity, m.isCancelled),
-              renderCell(fmt(m.unitPrice), m.isCancelled),
-              m.isCancelled ? (
-                <Chip label="İptal" size="small" variant="outlined" color="error" sx={{ fontSize: "0.7rem" }} />
-              ) : m.referenceType ? (
-                <Chip label={m.referenceType} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
-              ) : (
-                <span style={{ opacity: 0.5 }}>—</span>
-              ),
-              renderCell(new Date(m.createdAt).toLocaleString("tr-TR"), m.isCancelled)
-            ];
-            if (canManage) {
-              row.push(
-                !m.isCancelled && isManual ? (
-                  <Button
-                    size="small"
-                    color="error"
-                    variant="outlined"
-                    onClick={() => setCancelTargetId(m.id)}
-                    disabled={cancelMovement.isPending}
+              <DataTable
+                isLoading={current.isLoading}
+                columns={["Barkod", "Ürün Kodu", "Ürün Adı", "Depo Adı", "Mevcut Miktar"]}
+                rows={filteredCurrent.map(s => [
+                  s.productBarcode || <span style={{ opacity: 0.5 }}>—</span>,
+                  <Typography variant="body2" fontWeight={700} color="primary.main">{s.productCode}</Typography>,
+                  s.productName,
+                  s.warehouseName,
+                  <Typography
+                    variant="body2"
+                    fontWeight={700}
+                    color={s.quantity <= 0 ? "error.main" : "text.primary"}
                   >
-                    İptal Et
-                  </Button>
-                ) : ("")
-              );
-            }
-            return row;
-          })}
-        />
+                    {s.quantity.toFixed(2)}
+                  </Typography>
+                ])}
+              />
 
-        <TablePagination
-          rowsPerPageOptions={[10, 25, 50, 100]}
-          component="div"
-          count={movements.data?.totalCount ?? 0}
-          rowsPerPage={movementRowsPerPage}
-          page={movementPage}
-          onPageChange={(_, newPage) => setMovementPage(newPage)}
-          onRowsPerPageChange={(e) => {
-            setMovementRowsPerPage(parseInt(e.target.value, 10));
-            setMovementPage(0);
-          }}
-          labelRowsPerPage="Sayfa başına satır:"
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
-        />
-      </Box>
+              <TablePagination
+                rowsPerPageOptions={[10, 25, 50, 100]}
+                component="div"
+                count={current.data?.totalCount ?? 0}
+                rowsPerPage={currentRowsPerPage}
+                page={currentPage}
+                onPageChange={(_, newPage) => setCurrentPage(newPage)}
+                onRowsPerPageChange={(e) => {
+                  setCurrentRowsPerPage(parseInt(e.target.value, 10));
+                  setCurrentPage(0);
+                }}
+                labelRowsPerPage="Sayfa başına satır:"
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
+              />
+            </>
+          )}
+        </Box>
+      </Paper>
 
       {/* Cancellation Confirmation Dialog */}
       <Dialog
