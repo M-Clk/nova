@@ -43,6 +43,7 @@ import SupervisorAccountOutlinedIcon from "@mui/icons-material/SupervisorAccount
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import TerminalOutlinedIcon from "@mui/icons-material/TerminalOutlined";
+import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProductsPage } from "./pages/ProductsPage";
@@ -55,6 +56,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/UsersPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { DiscountsPage } from "./pages/DiscountsPage";
 import { SystemLogsPage } from "./pages/SystemLogsPage";
 import { KioskPage } from "./pages/KioskPage";
 import { AppThemeProvider, useThemeMode } from "./theme/ThemeContext";
@@ -126,6 +128,9 @@ function NavigationContent({ onClose }: { onClose?: () => void }) {
     { to: "/stock", label: "Stok Hareketleri", icon: <SwapHorizOutlinedIcon /> },
     ...((user?.role === "Admin" || user?.role === "Manager")
       ? [{ to: "/reports", label: "Raporlar", icon: <AssessmentOutlinedIcon /> }]
+      : []),
+    ...((user?.role === "Admin" || user?.role === "Manager")
+      ? [{ to: "/discounts", label: "İndirimler", icon: <LocalOfferOutlinedIcon /> }]
       : []),
     { to: "/customers", label: "Müşteriler", icon: <PeopleOutlinedIcon /> },
     { to: "/warehouses", label: "Depolar", icon: <BusinessOutlinedIcon /> },
@@ -290,6 +295,7 @@ function MainLayout() {
       case "/warehouses": return "Depo Yönetimi";
       case "/pos": return "POS Kasası";
       case "/reports": return "Raporlar";
+      case "/discounts": return "İndirim Yönetimi";
       case "/users": return "Personel Yönetimi";
       case "/logs": return "Sistem Logları";
       case "/settings": return "Ayarlar";
@@ -394,6 +400,7 @@ function App() {
                     <Route path="warehouses" element={<WarehousesPage />} />
                     <Route path="pos" element={<POSPage />} />
                     <Route path="reports" element={<AllowedRolesRoute roles={["Admin", "Manager"]}><ReportsPage /></AllowedRolesRoute>} />
+                    <Route path="discounts" element={<AllowedRolesRoute roles={["Admin", "Manager"]}><DiscountsPage /></AllowedRolesRoute>} />
                     <Route path="users" element={<AllowedRolesRoute roles={["Admin"]}><UsersPage /></AllowedRolesRoute>} />
                     <Route path="logs" element={<AllowedRolesRoute roles={["Admin"]}><SystemLogsPage /></AllowedRolesRoute>} />
                     <Route path="settings" element={<SettingsPage />} />

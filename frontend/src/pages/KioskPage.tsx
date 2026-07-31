@@ -270,19 +270,69 @@ export function KioskPage() {
                 {product.name}
               </Typography>
 
-              {/* Fiyat kutusu */}
-              <Box sx={{
-                background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                borderRadius: 4, px: 8, py: 3,
-                boxShadow: "0 16px 48px rgba(99,102,241,0.4)"
-              }}>
-                <Typography sx={{
-                  fontWeight: 900, fontSize: "4rem", color: "#fff",
-                  letterSpacing: "-0.04em", lineHeight: 1
+              {/* İndirimli fiyat gösterimi */}
+              {product.discountedPrice != null ? (
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
+                  {/* Üstü çizili orijinal fiyat */}
+                  <Typography sx={{
+                    fontWeight: 600, fontSize: "1.8rem", color: "text.disabled",
+                    textDecoration: "line-through", letterSpacing: "-0.02em", lineHeight: 1
+                  }}>
+                    {formatPrice(product.salePrice)}
+                  </Typography>
+
+                  {/* İndirimli fiyat kutusu */}
+                  <Box sx={{
+                    background: "linear-gradient(135deg, #059669, #10b981)",
+                    borderRadius: 4, px: 8, py: 3,
+                    boxShadow: "0 16px 48px rgba(16,185,129,0.4)",
+                    position: "relative"
+                  }}>
+                    <Typography sx={{
+                      fontWeight: 900, fontSize: "4rem", color: "#fff",
+                      letterSpacing: "-0.04em", lineHeight: 1
+                    }}>
+                      {formatPrice(product.discountedPrice)}
+                    </Typography>
+                    {/* İndirim yüzde badge */}
+                    {product.discountPercentage != null && (
+                      <Box sx={{
+                        position: "absolute", top: -12, right: -12,
+                        background: "#ef4444", color: "#fff", borderRadius: "50%",
+                        width: 56, height: 56, display: "flex", alignItems: "center",
+                        justifyContent: "center", fontWeight: 900, fontSize: "1rem",
+                        boxShadow: "0 4px 16px rgba(239,68,68,0.4)"
+                      }}>
+                        %{product.discountPercentage}
+                      </Box>
+                    )}
+                  </Box>
+
+                  {/* Kampanya adı */}
+                  {product.discountName && (
+                    <Typography sx={{
+                      fontSize: "1.1rem", color: "success.main", fontWeight: 600,
+                      display: "flex", alignItems: "center", gap: 0.5
+                    }}>
+                      🏷️ {product.discountName}
+                    </Typography>
+                  )}
+                </Box>
+              ) : (
+                /* Normal fiyat kutusu (indirim yok) */
+                <Box sx={{
+                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                  borderRadius: 4, px: 8, py: 3,
+                  boxShadow: "0 16px 48px rgba(99,102,241,0.4)"
                 }}>
-                  {formatPrice(product.salePrice)}
-                </Typography>
-              </Box>
+                  <Typography sx={{
+                    fontWeight: 900, fontSize: "4rem", color: "#fff",
+                    letterSpacing: "-0.04em", lineHeight: 1
+                  }}>
+                    {formatPrice(product.salePrice)}
+                  </Typography>
+                </Box>
+              )}
 
               {/* Barkod */}
               <Chip

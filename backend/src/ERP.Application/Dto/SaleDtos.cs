@@ -18,7 +18,9 @@ public record SaleItemDto(
     string ProductName,
     decimal Quantity,
     decimal UnitPrice,
+    decimal ProductDiscountAmount,
     decimal DiscountAmount,
+    string? DiscountName,
     decimal LineTotal);
 
 public record CreateSaleRequest(

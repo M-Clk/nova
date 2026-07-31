@@ -12,7 +12,7 @@ public interface IPosService
     Task<PosCheckoutResult> CheckoutAsync(PosCheckoutRequest request, CancellationToken cancellationToken = default);
 }
 
-public class PosService(IErpDbContext db) : IPosService
+public class PosService(IErpDbContext db, IDiscountService discountService) : IPosService
 {
     public async Task<IReadOnlyList<TerminalDto>> GetTerminalsAsync(CancellationToken cancellationToken = default)
     {
@@ -27,11 +27,23 @@ public class PosService(IErpDbContext db) : IPosService
 
     public async Task<PosProductDto?> GetProductByBarcodeAsync(string barcode, CancellationToken cancellationToken = default)
     {
-        return await db.Products
+        var product = await db.Products
             .AsNoTracking()
             .Where(x => x.Barcode == barcode && x.IsActive)
-            .Select(x => new PosProductDto(x.Id, x.Barcode, x.Name, x.SalePrice))
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (product == null) return null;
+
+        var discount = await discountService.GetApplicableDiscountForProductAsync(product, cancellationToken);
+
+        return new PosProductDto(
+            product.Id,
+            product.Barcode,
+            product.Name,
+            product.SalePrice,
+            discount?.DiscountedUnitPrice,
+            discount?.DiscountName,
+            discount?.DiscountPercentage);
     }
 
     public async Task<PosCheckoutResult> CheckoutAsync(PosCheckoutRequest request, CancellationToken cancellationToken = default)
@@ -65,8 +77,14 @@ public class PosService(IErpDbContext db) : IPosService
                 .Where(x => productIds.Contains(x.Id) && x.IsActive)
                 .ToDictionaryAsync(x => x.Id, cancellationToken);
 
-            // Ara Toplam hesaplama ve indirim doğrulama
-            decimal totalGrossAmount = 0;
+            // Ürün indirimlerini hesapla
+            var productDiscounts = await discountService.GetApplicableDiscountsAsync(
+                productsById.Values, cancellationToken);
+
+            // Ara Toplam hesaplama (indirimli fiyatlar üzerinden) ve sepet indirimi doğrulama
+            decimal totalGrossAmount = 0;  // Orijinal fiyatlar toplamı
+            decimal totalAfterProductDiscount = 0;  // Ürün indirimi sonrası toplam
+
             foreach (var item in request.Items)
             {
                 if (item.Quantity <= 0)
@@ -75,13 +93,23 @@ public class PosService(IErpDbContext db) : IPosService
                 if (!productsById.TryGetValue(item.ProductId, out var product))
                     throw new InvalidOperationException($"Ürün bulunamadı veya aktif değil: {item.ProductId}");
 
-                totalGrossAmount += item.Quantity * product.SalePrice;
+                var grossLineTotal = item.Quantity * product.SalePrice;
+                totalGrossAmount += grossLineTotal;
+
+                if (productDiscounts.TryGetValue(item.ProductId, out var discount))
+                {
+                    totalAfterProductDiscount += item.Quantity * discount.DiscountedUnitPrice;
+                }
+                else
+                {
+                    totalAfterProductDiscount += grossLineTotal;
+                }
             }
 
             if (request.DiscountAmount < 0)
                 throw new InvalidOperationException("İndirim tutarı sıfırdan küçük olamaz.");
 
-            if (request.DiscountAmount > totalGrossAmount)
+            if (request.DiscountAmount > totalAfterProductDiscount)
                 throw new InvalidOperationException("İndirim tutarı toplam tutardan büyük olamaz.");
 
             var now = DateTime.UtcNow;
@@ -94,7 +122,8 @@ public class PosService(IErpDbContext db) : IPosService
                 CreatedAt = now
             };
 
-            decimal distributedDiscountSum = 0;
+            // Sepet indirimi dağıtımı için baz: ürün indirimi sonrası toplam
+            decimal distributedCartDiscountSum = 0;
             int itemIndex = 0;
             int totalItems = request.Items.Count;
 
@@ -104,23 +133,35 @@ public class PosService(IErpDbContext db) : IPosService
                 var unitPrice = product.SalePrice;
                 var grossTotal = item.Quantity * unitPrice;
 
-                decimal itemDiscount = 0;
-                if (totalGrossAmount > 0 && request.DiscountAmount > 0)
+                // Ürün indirimi hesapla
+                decimal productDiscountAmount = 0;
+                Guid? discountId = null;
+                if (productDiscounts.TryGetValue(item.ProductId, out var appliedDiscount))
+                {
+                    productDiscountAmount = Math.Round(appliedDiscount.DiscountAmountPerUnit * item.Quantity, 2);
+                    discountId = appliedDiscount.DiscountId;
+                }
+
+                var afterProductDiscount = grossTotal - productDiscountAmount;
+
+                // Sepet indirimi payını hesapla (ürün indirimi sonrası tutam üzerinden oransal)
+                decimal cartDiscountShare = 0;
+                if (totalAfterProductDiscount > 0 && request.DiscountAmount > 0)
                 {
                     itemIndex++;
                     if (itemIndex == totalItems)
                     {
                         // Yuvarlama kuruş farkını son kaleme yansıt
-                        itemDiscount = request.DiscountAmount - distributedDiscountSum;
+                        cartDiscountShare = request.DiscountAmount - distributedCartDiscountSum;
                     }
                     else
                     {
-                        itemDiscount = Math.Round(request.DiscountAmount * (grossTotal / totalGrossAmount), 2);
-                        distributedDiscountSum += itemDiscount;
+                        cartDiscountShare = Math.Round(request.DiscountAmount * (afterProductDiscount / totalAfterProductDiscount), 2);
+                        distributedCartDiscountSum += cartDiscountShare;
                     }
                 }
 
-                var lineTotal = grossTotal - itemDiscount;
+                var lineTotal = grossTotal - productDiscountAmount - cartDiscountShare;
 
                 sale.Items.Add(new SaleItem
                 {
@@ -129,7 +170,9 @@ public class PosService(IErpDbContext db) : IPosService
                     ProductId = item.ProductId,
                     Quantity = item.Quantity,
                     UnitPrice = unitPrice,
-                    DiscountAmount = itemDiscount,
+                    DiscountId = discountId,
+                    ProductDiscountAmount = productDiscountAmount,
+                    DiscountAmount = cartDiscountShare,
                     LineTotal = lineTotal
                 });
 
@@ -147,7 +190,7 @@ public class PosService(IErpDbContext db) : IPosService
                 });
 
                 sale.TotalAmount += grossTotal;
-                sale.DiscountAmount += itemDiscount;
+                sale.DiscountAmount += productDiscountAmount + cartDiscountShare;
             }
 
             sale.NetAmount = sale.TotalAmount - sale.DiscountAmount;

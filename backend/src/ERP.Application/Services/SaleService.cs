@@ -215,7 +215,9 @@ public class SaleService(IErpDbContext db) : ISaleService
                     i.Product != null ? i.Product.Name : string.Empty,
                     i.Quantity,
                     i.UnitPrice,
+                    i.ProductDiscountAmount,
                     i.DiscountAmount,
+                    i.Discount != null ? i.Discount.Name : null,
                     i.LineTotal)).ToList()));
     }
 }

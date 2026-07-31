@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<IPosService, PosService>();
         services.AddScoped<ITerminalService, TerminalService>();
         services.AddScoped<IWarehouseService, WarehouseService>();
+        services.AddScoped<IDiscountService, DiscountService>();
 
         // ─── Report Exporters (Strategy Pattern) ─────────────────────────
         // Yeni format eklemek için: services.AddScoped<IReportExporter, PdfReportExporter>();

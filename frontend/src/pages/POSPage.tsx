@@ -280,20 +280,22 @@ export function POSPage() {
   };
 
   // Totals
-  const subtotal = cart.reduce((sum, i) => sum + i.lineTotal, 0);
+  const subtotalOriginal = cart.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const totalProductDiscount = cart.reduce((sum, i) => sum + i.productDiscountAmount, 0);
+  const subtotalAfterProductDiscount = subtotalOriginal - totalProductDiscount;
   
   let calculatedDiscount = 0;
   const parsedValue = parseFloat(discountValue) || 0;
   if (parsedValue > 0) {
     if (discountType === "percentage") {
-      calculatedDiscount = Math.round((subtotal * parsedValue) / 100 * 100) / 100;
+      calculatedDiscount = Math.round((subtotalAfterProductDiscount * parsedValue) / 100 * 100) / 100;
     } else {
       calculatedDiscount = parsedValue;
     }
   }
-  calculatedDiscount = Math.min(calculatedDiscount, subtotal);
+  calculatedDiscount = Math.min(calculatedDiscount, subtotalAfterProductDiscount);
 
-  const total = subtotal - calculatedDiscount;
+  const total = subtotalAfterProductDiscount - calculatedDiscount;
   const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   const selectedTerminal = terminals.find((t) => t.id === selectedTerminalId);
@@ -519,6 +521,15 @@ export function POSPage() {
                         <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>
                           {item.barcode}
                         </Typography>
+                        {item.discountName && (
+                          <Chip
+                            label={`🏷️ ${item.discountName}${item.discountPercentage ? ` -%${item.discountPercentage}` : ""}`}
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                            sx={{ mt: 0.5, height: 20, fontSize: "0.65rem", fontWeight: 600 }}
+                          />
+                        )}
                       </TableCell>
                       <TableCell align="center">
                         <Box
@@ -555,12 +566,28 @@ export function POSPage() {
                         </Box>
                       </TableCell>
                       <TableCell align="right">
-                        <Typography variant="body2">{fmt(item.unitPrice)}</Typography>
+                        {item.discountedPrice != null ? (
+                          <Box>
+                            <Typography variant="caption" sx={{ textDecoration: "line-through", opacity: 0.5 }}>
+                              {fmt(item.unitPrice)}
+                            </Typography>
+                            <Typography variant="body2" fontWeight={700} color="success.main">
+                              {fmt(item.discountedPrice)}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography variant="body2">{fmt(item.unitPrice)}</Typography>
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" fontWeight={700} color="primary.main">
                           {fmt(item.lineTotal)}
                         </Typography>
+                        {item.productDiscountAmount > 0 && (
+                          <Typography variant="caption" color="success.main" fontWeight={600}>
+                            İnd: -{fmt(item.productDiscountAmount)}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell align="center">
                         <Tooltip title="Ürünü Kaldır">
@@ -656,13 +683,24 @@ export function POSPage() {
                 Ara Toplam ({itemCount} ürün)
               </Typography>
               <Typography variant="body2" fontWeight={600}>
-                {fmt(subtotal)}
+                {fmt(subtotalOriginal)}
               </Typography>
             </Box>
 
+            {totalProductDiscount > 0 && (
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Typography variant="body2" color="text.secondary">
+                  🏷️ Ürün İndirimleri
+                </Typography>
+                <Typography variant="body2" fontWeight={600} color="success.main">
+                  -{fmt(totalProductDiscount)}
+                </Typography>
+              </Box>
+            )}
+
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="body2" color="text.secondary">
-                İndirim
+                Sepet İndirimi
               </Typography>
               <Typography variant="body2" fontWeight={600} color="success.main">
                 -{fmt(calculatedDiscount)}

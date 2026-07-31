@@ -19,6 +19,7 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
+    public DbSet<Discount> Discounts => Set<Discount>();
 
     public async Task<IErpTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
@@ -129,10 +130,12 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Quantity).HasPrecision(18, 3);
             entity.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            entity.Property(x => x.ProductDiscountAmount).HasPrecision(18, 2);
             entity.Property(x => x.DiscountAmount).HasPrecision(18, 2);
             entity.Property(x => x.LineTotal).HasPrecision(18, 2);
             entity.HasOne(x => x.Sale).WithMany(x => x.Items).HasForeignKey(x => x.SaleId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(x => x.Product).WithMany(x => x.SaleItems).HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Discount).WithMany().HasForeignKey(x => x.DiscountId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<StockMovement>(entity =>
@@ -172,6 +175,20 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
                 IsActive = true,
                 CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             });
+        });
+
+        modelBuilder.Entity<Discount>(entity =>
+        {
+            entity.ToTable("Discounts");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Scope).IsRequired();
+            entity.Property(x => x.Type).IsRequired();
+            entity.Property(x => x.Value).HasPrecision(18, 2);
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.Property(x => x.DaysOfWeek).HasMaxLength(20);
+            entity.Property(x => x.CreatedAt).IsRequired();
+            entity.HasIndex(x => new { x.Scope, x.TargetId, x.IsActive });
         });
 
         modelBuilder.Entity<SystemSetting>(entity =>

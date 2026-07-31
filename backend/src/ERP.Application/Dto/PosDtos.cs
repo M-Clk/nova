@@ -15,7 +15,10 @@ public record PosProductDto(
     Guid Id,
     string Barcode,
     string Name,
-    decimal SalePrice);
+    decimal SalePrice,
+    decimal? DiscountedPrice,
+    string? DiscountName,
+    decimal? DiscountPercentage);
 
 public record PosCheckoutRequest(
     Guid? CustomerId,

@@ -278,6 +278,11 @@ export function SaleReceiptModal({ open, sale, onClose }: SaleReceiptModalProps)
                     <div style={{ fontSize: "0.7rem", opacity: 0.6, marginTop: "2px" }}>
                       {item.productCode}
                     </div>
+                    {item.discountName && (
+                      <div style={{ fontSize: "0.65rem", opacity: 0.7, marginTop: "2px", fontStyle: "italic" }}>
+                        🏷️ {item.discountName}
+                      </div>
+                    )}
                   </td>
                   <td style={{ textAlign: "right", padding: "8px 0", verticalAlign: "top", fontSize: "0.8rem" }}>
                     {item.quantity}
@@ -287,9 +292,14 @@ export function SaleReceiptModal({ open, sale, onClose }: SaleReceiptModalProps)
                   </td>
                   <td style={{ textAlign: "right", padding: "8px 0", verticalAlign: "top", fontSize: "0.8rem", fontWeight: 600 }}>
                     {fmt(item.lineTotal)}
+                    {item.productDiscountAmount > 0 && (
+                      <div style={{ fontSize: "0.7rem", opacity: 0.7, fontWeight: 400, marginTop: "2px", color: "#059669" }}>
+                        Ürün İnd:-{fmt(item.productDiscountAmount)}
+                      </div>
+                    )}
                     {item.discountAmount > 0 && (
                       <div style={{ fontSize: "0.7rem", opacity: 0.7, fontWeight: 400, marginTop: "2px" }}>
-                        İnd:-{fmt(item.discountAmount)}
+                        Sepet İnd:-{fmt(item.discountAmount)}
                       </div>
                     )}
                   </td>
@@ -311,16 +321,34 @@ export function SaleReceiptModal({ open, sale, onClose }: SaleReceiptModalProps)
                 {fmt(sale.totalAmount)}
               </Typography>
             </Box>
-            {sale.discountAmount > 0 && (
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.4 }}>
-                <Typography sx={{ fontFamily: "inherit", fontSize: "0.8rem", opacity: 0.75 }}>
-                  Toplam İndirim:
-                </Typography>
-                <Typography sx={{ fontFamily: "inherit", fontSize: "0.8rem" }}>
-                  -{fmt(sale.discountAmount)}
-                </Typography>
-              </Box>
-            )}
+            {(() => {
+              const totalProductDiscount = (sale.items ?? []).reduce((s, i) => s + i.productDiscountAmount, 0);
+              const totalCartDiscount = (sale.items ?? []).reduce((s, i) => s + i.discountAmount, 0);
+              return (
+                <>
+                  {totalProductDiscount > 0 && (
+                    <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.4 }}>
+                      <Typography sx={{ fontFamily: "inherit", fontSize: "0.8rem", opacity: 0.75 }}>
+                        Ürün İndirimleri:
+                      </Typography>
+                      <Typography sx={{ fontFamily: "inherit", fontSize: "0.8rem", color: "#059669" }}>
+                        -{fmt(totalProductDiscount)}
+                      </Typography>
+                    </Box>
+                  )}
+                  {totalCartDiscount > 0 && (
+                    <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.4 }}>
+                      <Typography sx={{ fontFamily: "inherit", fontSize: "0.8rem", opacity: 0.75 }}>
+                        Sepet İndirimi:
+                      </Typography>
+                      <Typography sx={{ fontFamily: "inherit", fontSize: "0.8rem" }}>
+                        -{fmt(totalCartDiscount)}
+                      </Typography>
+                    </Box>
+                  )}
+                </>
+              );
+            })()}
             <Divider sx={{ my: 1 }} />
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
               <Typography

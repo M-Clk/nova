@@ -83,11 +83,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addToCart = useCallback((product: PosProductDto) => {
     setCart((prev) => {
+      const effectivePrice = product.discountedPrice ?? product.salePrice;
       const existing = prev.find((i) => i.productId === product.id);
       if (existing) {
         return prev.map((i) =>
           i.productId === product.id
-            ? { ...i, quantity: i.quantity + 1, lineTotal: (i.quantity + 1) * i.unitPrice }
+            ? {
+                ...i,
+                quantity: i.quantity + 1,
+                lineTotal: (i.quantity + 1) * effectivePrice,
+                productDiscountAmount: (i.quantity + 1) * (product.salePrice - effectivePrice),
+              }
             : i
         );
       }
@@ -99,7 +105,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           name: product.name,
           quantity: 1,
           unitPrice: product.salePrice,
-          lineTotal: product.salePrice,
+          lineTotal: effectivePrice,
+          discountedPrice: product.discountedPrice,
+          discountName: product.discountName,
+          discountPercentage: product.discountPercentage,
+          productDiscountAmount: product.salePrice - effectivePrice,
         },
       ];
     });
@@ -112,7 +122,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           if (item.productId !== productId) return item;
           const newQty = item.quantity + delta;
           if (newQty <= 0) return null;
-          return { ...item, quantity: newQty, lineTotal: newQty * item.unitPrice };
+          const effectivePrice = item.discountedPrice ?? item.unitPrice;
+          return {
+            ...item,
+            quantity: newQty,
+            lineTotal: newQty * effectivePrice,
+            productDiscountAmount: newQty * (item.unitPrice - effectivePrice),
+          };
         })
         .filter(Boolean) as CartItem[];
     });

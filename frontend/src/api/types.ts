@@ -80,7 +80,9 @@ export type SaleItemDto = {
   productName: string;
   quantity: number;
   unitPrice: number;
+  productDiscountAmount: number;
   discountAmount: number;
+  discountName: string | null;
   lineTotal: number;
 };
 
@@ -134,6 +136,9 @@ export type PosProductDto = {
   barcode: string;
   name: string;
   salePrice: number;
+  discountedPrice: number | null;
+  discountName: string | null;
+  discountPercentage: number | null;
 };
 
 export type TerminalDto = {
@@ -178,6 +183,10 @@ export type CartItem = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  discountedPrice: number | null;
+  discountName: string | null;
+  discountPercentage: number | null;
+  productDiscountAmount: number;
 };
 
 export type PosCheckoutItemRequest = {
@@ -308,4 +317,56 @@ export type PaginatedLogsDto = {
   page: number;
   pageSize: number;
   totalPages: number;
+};
+
+// ─── Discount Types ──────────────────────────────────────────────────────────
+
+export type DiscountDto = {
+  id: string;
+  name: string;
+  scope: number;
+  scopeName: string;
+  targetId: string | null;
+  targetName: string | null;
+  type: number;
+  typeName: string;
+  value: number;
+  startDate: string | null;
+  endDate: string | null;
+  daysOfWeek: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  isActive: boolean;
+  isCurrentlyApplicable: boolean;
+  priority: number;
+  createdAt: string;
+};
+
+export type CreateDiscountRequest = {
+  name: string;
+  scope: number;
+  targetId: string | null;
+  type: number;
+  value: number;
+  startDate: string | null;
+  endDate: string | null;
+  daysOfWeek: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  priority: number;
+};
+
+export type UpdateDiscountRequest = {
+  name: string;
+  scope: number;
+  targetId: string | null;
+  type: number;
+  value: number;
+  startDate: string | null;
+  endDate: string | null;
+  daysOfWeek: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  isActive: boolean;
+  priority: number;
 };
