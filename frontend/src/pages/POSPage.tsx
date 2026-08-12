@@ -95,8 +95,11 @@ function CartQuantityInput({
   const [valStr, setValStr] = useState(String(quantity));
 
   useEffect(() => {
-    setValStr(String(quantity));
-  }, [quantity]);
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (activeEl?.id !== `pos-qty-input-${productId}`) {
+      setValStr(String(quantity));
+    }
+  }, [quantity, productId]);
 
   const commitValue = (valToCommit: string) => {
     const num = parseInt(valToCommit, 10);
@@ -241,6 +244,17 @@ export function POSPage() {
   // State-driven automatic focus: Whenever cart, scanning status, last sale, or terminal changes, force focus on barcode field
   useEffect(() => {
     const timer = setTimeout(() => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (
+        activeEl &&
+        activeEl !== barcodeRef.current &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.closest("input") ||
+          activeEl.closest(".MuiInputBase-root"))
+      ) {
+        return;
+      }
       barcodeRef.current?.focus();
     }, 80);
     return () => clearTimeout(timer);
@@ -257,8 +271,12 @@ export function POSPage() {
         target.tagName === "BUTTON" ||
         target.tagName === "SELECT" ||
         target.tagName === "TEXTAREA" ||
+        target.closest("input") ||
         target.closest("button") ||
         target.closest("a") ||
+        target.closest(".MuiInputBase-root") ||
+        target.closest(".MuiFormControl-root") ||
+        target.closest(".MuiOutlinedInput-root") ||
         target.closest("[role='combobox']") ||
         target.closest("[role='listbox']") ||
         target.closest("[role='option']") ||
@@ -484,8 +502,12 @@ export function POSPage() {
                       activeEl.tagName === "BUTTON" ||
                       activeEl.tagName === "SELECT" ||
                       activeEl.tagName === "TEXTAREA" ||
+                      activeEl.closest("input") ||
                       activeEl.closest("button") ||
                       activeEl.closest("a") ||
+                      activeEl.closest(".MuiInputBase-root") ||
+                      activeEl.closest(".MuiFormControl-root") ||
+                      activeEl.closest(".MuiOutlinedInput-root") ||
                       activeEl.closest("[role='combobox']") ||
                       activeEl.closest("[role='listbox']") ||
                       activeEl.closest("[role='option']") ||
