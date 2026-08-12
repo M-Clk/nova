@@ -294,9 +294,9 @@ public class StockReportService(IErpDbContext db, IReportExporterFactory exporte
             item.ProductBarcode,
             item.WarehouseName,
             item.TypeName,
-            item.Quantity.ToString("N2"),
-            item.UnitPrice.ToString("N2"),
-            item.LineValue.ToString("N2"),
+            item.Quantity.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+            item.UnitPrice.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+            item.LineValue.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
             item.ReferenceType,
             item.IsCancelled ? "İptal" : "Aktif"
         });

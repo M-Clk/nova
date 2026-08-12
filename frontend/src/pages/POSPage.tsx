@@ -25,6 +25,8 @@ import {
   Badge,
   Checkbox,
   FormControlLabel,
+  Dialog,
+  DialogContent,
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddIcon from "@mui/icons-material/Add";
@@ -36,6 +38,8 @@ import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import KeyboardIcon from "@mui/icons-material/Keyboard";
 import PrintIcon from "@mui/icons-material/Print";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import { playErrorSound } from "../utils/audio";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiClient } from "../api/apiClient";
 import type {
@@ -75,6 +79,93 @@ const checkout = async (request: PosCheckoutRequest): Promise<PosCheckoutResult>
 const fmt = (amount: number) =>
   new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount);
 
+// ─── Quantity Input Sub-Component ─────────────────────────────────────────────
+
+function CartQuantityInput({
+  productId,
+  quantity,
+  onSetQty,
+  onFocusBarcode,
+}: {
+  productId: string;
+  quantity: number;
+  onSetQty: (productId: string, qty: number) => void;
+  onFocusBarcode: () => void;
+}) {
+  const [valStr, setValStr] = useState(String(quantity));
+
+  useEffect(() => {
+    setValStr(String(quantity));
+  }, [quantity]);
+
+  const commitValue = (valToCommit: string) => {
+    const num = parseInt(valToCommit, 10);
+    if (!isNaN(num) && num > 0) {
+      onSetQty(productId, num);
+      setValStr(String(num));
+    } else {
+      setValStr(String(quantity));
+    }
+  };
+
+  return (
+    <TextField
+      size="small"
+      type="number"
+      id={`pos-qty-input-${productId}`}
+      value={valStr}
+      onChange={(e) => {
+        const text = e.target.value;
+        setValStr(text);
+        const num = parseInt(text, 10);
+        if (!isNaN(num) && num > 0) {
+          onSetQty(productId, num);
+        }
+      }}
+      onFocus={(e) => {
+        (e.target as HTMLInputElement).select();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === "Tab" || e.key === "Escape") {
+          e.preventDefault();
+          commitValue(valStr);
+          onFocusBarcode();
+        }
+      }}
+      onBlur={() => {
+        commitValue(valStr);
+      }}
+      inputProps={{
+        min: 1,
+        max: 99999,
+        style: {
+          textAlign: "center",
+          padding: "2px 4px",
+          fontWeight: 700,
+          fontSize: "0.9rem",
+        },
+      }}
+      sx={{
+        width: "56px",
+        "& .MuiOutlinedInput-root": {
+          padding: 0,
+          borderRadius: 1.5,
+          "& fieldset": { borderColor: "divider" },
+          "&:hover fieldset": { borderColor: "primary.main" },
+          "&.Mui-focused fieldset": { borderColor: "primary.main", borderWidth: 2 },
+        },
+        "& input[type=number]::-webkit-inner-spin-button, & input[type=number]::-webkit-outer-spin-button": {
+          "-webkit-appearance": "none",
+          margin: 0,
+        },
+        "& input[type=number]": {
+          "-moz-appearance": "textfield",
+        },
+      }}
+    />
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function POSPage() {
@@ -84,6 +175,7 @@ export function POSPage() {
     setSelectedTerminalId,
     addToCart,
     updateQty,
+    setQty,
     removeItem,
     clearCart,
   } = useCart();
@@ -100,8 +192,23 @@ export function POSPage() {
   const [receiptSale, setReceiptSale] = useState<SaleDto | null>(null);
   const [discountType, setDiscountType] = useState<"percentage" | "amount">("amount");
   const [discountValue, setDiscountValue] = useState<string>("");
+  const [notFoundBarcode, setNotFoundBarcode] = useState<string | null>(null);
   const barcodeRef = useRef<HTMLInputElement>(null);
   const discountRef = useRef<HTMLInputElement>(null);
+
+  const handleCloseNotFound = useCallback(() => {
+    setNotFoundBarcode(null);
+    setTimeout(() => barcodeRef.current?.focus(), 50);
+  }, []);
+
+  useEffect(() => {
+    if (notFoundBarcode) {
+      const timer = setTimeout(() => {
+        handleCloseNotFound();
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [notFoundBarcode, handleCloseNotFound]);
 
   const { data: terminals = [], isLoading: terminalsLoading } = useQuery({
     queryKey: ["pos-terminals"],
@@ -175,6 +282,13 @@ export function POSPage() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      if (notFoundBarcode) {
+        if (e.key === "Enter" || e.key === "Escape" || e.key === " ") {
+          e.preventDefault();
+          handleCloseNotFound();
+          return;
+        }
+      }
       if (e.key === "F2") {
         e.preventDefault();
         barcodeRef.current?.focus();
@@ -195,7 +309,7 @@ export function POSPage() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, selectedTerminalId]);
+  }, [cart, selectedTerminalId, notFoundBarcode, handleCloseNotFound]);
 
   const showSnack = (message: string, severity: "success" | "error" | "warning") => {
     setSnack({ open: true, message, severity });
@@ -248,7 +362,8 @@ export function POSPage() {
     if (product) {
       addToCart(product);
     } else {
-      showSnack(`Barkod bulunamadı: ${code}`, "warning");
+      playErrorSound();
+      setNotFoundBarcode(code);
     }
 
     barcodeRef.current?.focus();
@@ -548,13 +663,12 @@ export function POSPage() {
                           >
                             <RemoveIcon sx={{ fontSize: 14 }} />
                           </IconButton>
-                          <Typography
-                            variant="body2"
-                            fontWeight={700}
-                            sx={{ minWidth: 28, textAlign: "center" }}
-                          >
-                            {item.quantity}
-                          </Typography>
+                          <CartQuantityInput
+                            productId={item.productId}
+                            quantity={item.quantity}
+                            onSetQty={setQty}
+                            onFocusBarcode={() => setTimeout(() => barcodeRef.current?.focus(), 50)}
+                          />
                           <IconButton
                             size="small"
                             id={`pos-inc-${item.productId}`}
@@ -889,6 +1003,103 @@ export function POSPage() {
           setTimeout(() => barcodeRef.current?.focus(), 100);
         }}
       />
+
+      {/* Ürün Bulunamadı Ortalanmış Büyük Hata Modalı */}
+      <Dialog
+        open={!!notFoundBarcode}
+        onClose={handleCloseNotFound}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            p: 1,
+            textAlign: "center",
+            background: (theme) =>
+              theme.palette.mode === "dark"
+                ? "linear-gradient(135deg, #2d1215 0%, #1a090b 100%)"
+                : "linear-gradient(135deg, #fff5f5 0%, #fee2e2 100%)",
+            border: "2px solid",
+            borderColor: "error.main",
+            boxShadow: "0 20px 60px rgba(239, 68, 68, 0.35)",
+          },
+        }}
+      >
+        <DialogContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, py: 3.5 }}>
+          <Box
+            sx={{
+              width: 84,
+              height: 84,
+              borderRadius: "50%",
+              bgcolor: "error.main",
+              color: "common.white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 8px 24px rgba(239, 68, 68, 0.4)",
+              animation: "pulseError 1.5s infinite ease-in-out",
+              "@keyframes pulseError": {
+                "0%": { transform: "scale(1)", boxShadow: "0 0 0 0 rgba(239, 68, 68, 0.5)" },
+                "70%": { transform: "scale(1.06)", boxShadow: "0 0 0 16px rgba(239, 68, 68, 0)" },
+                "100%": { transform: "scale(1)", boxShadow: "0 0 0 0 rgba(239, 68, 68, 0)" },
+              },
+            }}
+          >
+            <ErrorOutlineIcon sx={{ fontSize: 54 }} />
+          </Box>
+
+          <Box>
+            <Typography variant="h5" fontWeight={900} color="error.main" sx={{ letterSpacing: "0.02em" }}>
+              ÜRÜN BULUNAMADI!
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontWeight: 500 }}>
+              Sistemde okutulan barkoda ait ürün yer almamaktadır.
+            </Typography>
+          </Box>
+
+          {notFoundBarcode && (
+            <Paper
+              variant="outlined"
+              sx={{
+                px: 3,
+                py: 1.2,
+                borderRadius: 2.5,
+                borderColor: "error.light",
+                bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(239, 68, 68, 0.1)" : "rgba(239, 68, 68, 0.05)"),
+                width: "100%",
+              }}
+            >
+              <Typography variant="caption" color="text.secondary" display="block" fontWeight={600}>
+                Okutulan Barkod
+              </Typography>
+              <Typography variant="h6" fontWeight={800} color="error.dark" sx={{ fontFamily: "monospace", letterSpacing: "0.08em" }}>
+                {notFoundBarcode}
+              </Typography>
+            </Paper>
+          )}
+
+          <Button
+            variant="contained"
+            color="error"
+            size="large"
+            fullWidth
+            onClick={handleCloseNotFound}
+            sx={{
+              mt: 1,
+              py: 1.4,
+              fontWeight: 800,
+              fontSize: "1.05rem",
+              borderRadius: 2.5,
+              boxShadow: "0 4px 14px rgba(239, 68, 68, 0.4)",
+              "&:hover": {
+                boxShadow: "0 6px 20px rgba(239, 68, 68, 0.6)",
+              },
+            }}
+          >
+            TAMAM  (ENTER)
+          </Button>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

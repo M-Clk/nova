@@ -60,22 +60,25 @@ public class CsvReportExporter : IReportExporter
         using var writer = new StreamWriter(ms, new System.Text.UTF8Encoding(true));
 
         // BOM for Excel UTF-8 compatibility
-        writer.WriteLine(string.Join(";", headers));
+        // Tüm alanlar tırnak içine alınır → Excel hiçbir alanı tarih/sayı olarak yorumlamaz
+        // (hem Türkçe hem İngilizce locale'de locale-bağımsız çalışır)
+        writer.WriteLine(string.Join(";", headers.Select(QuoteCsvField)));
 
         foreach (var row in rows)
         {
-            var escapedRow = row.Select(field =>
-            {
-                if (field.Contains(';') || field.Contains('"') || field.Contains('\n'))
-                    return $"\"{field.Replace("\"", "\"\"")}\"";
-                return field;
-            });
-            writer.WriteLine(string.Join(";", escapedRow));
+            writer.WriteLine(string.Join(";", row.Select(QuoteCsvField)));
         }
 
         writer.Flush();
         return ms.ToArray();
     }
+
+    /// <summary>
+    /// RFC 4180: tüm alanları çift tırnak içine alır.
+    /// İçindeki çift tırnak karakterleri iki katlanır ("" → \"\").
+    /// </summary>
+    private static string QuoteCsvField(string field)
+        => $"\"{field.Replace("\"", "\"\"")}\"";
 }
 
 /// <summary>

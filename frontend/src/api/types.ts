@@ -370,3 +370,53 @@ export type UpdateDiscountRequest = {
   isActive: boolean;
   priority: number;
 };
+
+// ─── Bulk Price Update Types ─────────────────────────────────────────────────────
+
+export type BulkPriceUpdateItem = {
+  productId: string;
+  purchasePrice?: number | null;
+  salePrice?: number | null;
+};
+
+export type BulkPriceUpdateRequest = {
+  items: BulkPriceUpdateItem[];
+};
+
+export type BulkPriceUpdateResult = {
+  updatedCount: number;
+  failedCount: number;
+  batchId: string;
+  notFoundIds: string[];
+};
+
+export type PriceHistoryDto = {
+  id: string;
+  productId: string;
+  productName: string;
+  productCode: string;
+  oldPurchasePrice: number;
+  newPurchasePrice: number;
+  oldSalePrice: number;
+  newSalePrice: number;
+  changedBy: string;
+  batchId: string;
+  isReverted: boolean;
+  createdAt: string;
+};
+
+// ─── CSV Price Import Types ───────────────────────────────────────────────────
+
+export type ImportPriceErrorRow = {
+  rowNumber: number;
+  rawLine: string;
+  reason: string;
+};
+
+export type ImportPriceResult = {
+  updatedCount: number;
+  skippedCount: number;
+  errorCount: number;
+  batchId: string | null;
+  errors: ImportPriceErrorRow[];
+};

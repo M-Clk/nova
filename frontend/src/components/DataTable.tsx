@@ -12,13 +12,14 @@ import {
 } from "@mui/material";
 
 interface DataTableProps {
-  columns: string[];
+  columns: (string | ReactNode)[];
   rows: Array<Array<ReactNode>>;
   isLoading?: boolean;
   skeletonRows?: number;
+  headerOverride?: ReactNode; // ilk sütun için özel header (ör. tümünü seç checkbox)
 }
 
-export function DataTable({ columns, rows, isLoading = false, skeletonRows = 6 }: DataTableProps) {
+export function DataTable({ columns, rows, isLoading = false, skeletonRows = 6, headerOverride }: DataTableProps) {
   const theme = useTheme();
 
   return (
@@ -36,9 +37,9 @@ export function DataTable({ columns, rows, isLoading = false, skeletonRows = 6 }
       <Table size="medium">
         <TableHead>
           <TableRow sx={{ bgcolor: theme.palette.mode === "dark" ? "background.paper" : "#F8FAFC" }}>
-            {columns.map((column) => (
+            {columns.map((column, colIdx) => (
               <TableCell 
-                key={column}
+                key={colIdx}
                 sx={{ 
                   fontWeight: 600, 
                   py: 1.8,
@@ -48,7 +49,7 @@ export function DataTable({ columns, rows, isLoading = false, skeletonRows = 6 }
                   letterSpacing: "0.02em"
                 }}
               >
-                {column}
+                {colIdx === 0 && headerOverride != null ? headerOverride : column}
               </TableCell>
             ))}
           </TableRow>

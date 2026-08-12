@@ -41,3 +41,45 @@ public record UpdateProductRequest(
 
 public record PaginatedListDto<T>(IReadOnlyList<T> Items, int TotalCount);
 
+// ─── Bulk Price Update ────────────────────────────────────────────────────────
+
+public record BulkPriceUpdateItem(
+    Guid ProductId,
+    decimal? PurchasePrice,
+    decimal? SalePrice);
+
+public record BulkPriceUpdateRequest(
+    IReadOnlyList<BulkPriceUpdateItem> Items);
+
+public record BulkPriceUpdateResult(
+    int UpdatedCount,
+    int FailedCount,
+    Guid BatchId,
+    IReadOnlyList<Guid> NotFoundIds);
+
+// ─── Price History ────────────────────────────────────────────────────────────
+
+public record PriceHistoryDto(
+    Guid Id,
+    Guid ProductId,
+    string ProductName,
+    string ProductCode,
+    decimal OldPurchasePrice,
+    decimal NewPurchasePrice,
+    decimal OldSalePrice,
+    decimal NewSalePrice,
+    string ChangedBy,
+    Guid BatchId,
+    bool IsReverted,
+    DateTime CreatedAt);
+
+// ─── CSV Price Import ─────────────────────────────────────────────────────────
+
+public record ImportPriceErrorRow(int RowNumber, string RawLine, string Reason);
+
+public record ImportPriceResult(
+    int UpdatedCount,
+    int SkippedCount,
+    int ErrorCount,
+    Guid? BatchId,
+    IReadOnlyList<ImportPriceErrorRow> Errors);

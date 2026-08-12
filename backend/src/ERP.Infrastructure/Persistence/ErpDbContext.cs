@@ -20,6 +20,7 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
     public DbSet<Discount> Discounts => Set<Discount>();
+    public DbSet<PriceHistory> PriceHistories => Set<PriceHistory>();
 
     public async Task<IErpTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
@@ -213,6 +214,25 @@ public class ErpDbContext(DbContextOptions<ErpDbContext> options) : DbContext(op
             entity.Property(x => x.Properties).HasColumnName("properties");
             entity.HasIndex(x => x.Timestamp);
             entity.HasIndex(x => x.Level);
+        });
+
+        modelBuilder.Entity<PriceHistory>(entity =>
+        {
+            entity.ToTable("PriceHistories");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OldPurchasePrice).HasPrecision(18, 2);
+            entity.Property(x => x.NewPurchasePrice).HasPrecision(18, 2);
+            entity.Property(x => x.OldSalePrice).HasPrecision(18, 2);
+            entity.Property(x => x.NewSalePrice).HasPrecision(18, 2);
+            entity.Property(x => x.ChangedBy).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.CreatedAt).IsRequired();
+            entity.Property(x => x.IsReverted).HasDefaultValue(false);
+            entity.HasIndex(x => x.BatchId);
+            entity.HasIndex(x => new { x.ProductId, x.CreatedAt });
+            entity.HasOne(x => x.Product)
+                  .WithMany()
+                  .HasForeignKey(x => x.ProductId)
+                  .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

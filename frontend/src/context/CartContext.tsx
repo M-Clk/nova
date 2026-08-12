@@ -8,6 +8,7 @@ interface CartContextValue {
   setSelectedTerminalId: (id: string) => void;
   addToCart: (product: PosProductDto) => void;
   updateQty: (productId: string, delta: number) => void;
+  setQty: (productId: string, quantity: number) => void;
   removeItem: (productId: string) => void;
   clearCart: () => void;
 }
@@ -21,6 +22,7 @@ const CartContext = createContext<CartContextValue>({
   setSelectedTerminalId: () => {},
   addToCart: () => {},
   updateQty: () => {},
+  setQty: () => {},
   removeItem: () => {},
   clearCart: () => {},
 });
@@ -134,6 +136,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const setQty = useCallback((productId: string, quantity: number) => {
+    setCart((prev) => {
+      if (quantity <= 0) {
+        return prev.filter((i) => i.productId !== productId);
+      }
+      return prev.map((item) => {
+        if (item.productId !== productId) return item;
+        const effectivePrice = item.discountedPrice ?? item.unitPrice;
+        return {
+          ...item,
+          quantity,
+          lineTotal: quantity * effectivePrice,
+          productDiscountAmount: quantity * (item.unitPrice - effectivePrice),
+        };
+      });
+    });
+  }, []);
+
   const removeItem = useCallback((productId: string) => {
     setCart((prev) => prev.filter((i) => i.productId !== productId));
   }, []);
@@ -149,10 +169,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setSelectedTerminalId,
       addToCart,
       updateQty,
+      setQty,
       removeItem,
       clearCart,
     }),
-    [cart, selectedTerminalId, setSelectedTerminalId, addToCart, updateQty, removeItem, clearCart]
+    [cart, selectedTerminalId, setSelectedTerminalId, addToCart, updateQty, setQty, removeItem, clearCart]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
