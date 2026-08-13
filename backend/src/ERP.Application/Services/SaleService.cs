@@ -207,6 +207,8 @@ public class SaleService(IErpDbContext db) : ISaleService
                 x.TotalAmount,
                 x.DiscountAmount,
                 x.NetAmount,
+                x.CartDiscountType,
+                x.CartDiscountPercentage,
                 x.CreatedAt,
                 x.Items.Select(i => new SaleItemDto(
                     i.Id,

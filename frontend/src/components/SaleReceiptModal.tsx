@@ -337,11 +337,19 @@ export function SaleReceiptModal({ open, sale, onClose }: SaleReceiptModalProps)
                     </Box>
                   )}
                   {totalCartDiscount > 0 && (
-                    <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.4 }}>
-                      <Typography sx={{ fontFamily: "inherit", fontSize: "0.8rem", opacity: 0.75 }}>
-                        Sepet İndirimi:
-                      </Typography>
-                      <Typography sx={{ fontFamily: "inherit", fontSize: "0.8rem" }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 0.4 }}>
+                      <Box>
+                        <Typography sx={{ fontFamily: "inherit", fontSize: "0.8rem", opacity: 0.75 }}>
+                          Sepet İndirimi:
+                        </Typography>
+                        {/* İndirim tipi / oranı */}
+                        <Typography sx={{ fontFamily: "inherit", fontSize: "0.68rem", opacity: 0.55, mt: 0.1 }}>
+                          {sale.cartDiscountType === 1
+                            ? `%${sale.cartDiscountPercentage} İndirim`
+                            : "Manuel İndirim (Tutar)"}
+                        </Typography>
+                      </Box>
+                      <Typography sx={{ fontFamily: "inherit", fontSize: "0.8rem", color: "#d97706", fontWeight: 600 }}>
                         -{fmt(totalCartDiscount)}
                       </Typography>
                     </Box>

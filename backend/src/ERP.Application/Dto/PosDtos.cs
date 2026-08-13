@@ -24,7 +24,11 @@ public record PosCheckoutRequest(
     Guid? CustomerId,
     Guid TerminalId,
     IReadOnlyList<PosCheckoutItemRequest> Items,
-    decimal DiscountAmount = 0);
+    decimal DiscountAmount = 0,
+    /// <summary>0 = Tutar, 1 = Yüzde</summary>
+    int DiscountType = 0,
+    /// <summary>Yüzde tipinde ise oranın kendisi (ör. 10 = %10)</summary>
+    decimal? DiscountPercentage = null);
 
 public record PosCheckoutItemRequest(
     Guid ProductId,

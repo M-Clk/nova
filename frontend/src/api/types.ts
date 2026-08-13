@@ -94,6 +94,10 @@ export type SaleDto = {
   totalAmount: number;
   discountAmount: number;
   netAmount: number;
+  /** 0 = Tutar, 1 = Yüzde, null = indirim yok */
+  cartDiscountType: number | null;
+  /** Yüzde tipinde ise oran (ör. 10 = %10) */
+  cartDiscountPercentage: number | null;
   createdAt: string;
   items: SaleItemDto[];
 };
@@ -199,6 +203,10 @@ export type PosCheckoutRequest = {
   terminalId: string;
   items: PosCheckoutItemRequest[];
   discountAmount?: number;
+  /** 0 = Tutar, 1 = Yüzde */
+  discountType?: number;
+  /** Yüzde tipinde ise oran (ör. 10 = %10) */
+  discountPercentage?: number | null;
 };
 
 export type PosCheckoutResult = {

@@ -119,6 +119,8 @@ public class PosService(IErpDbContext db, IDiscountService discountService) : IP
                 SaleNo = $"POS-{now:yyyyMMddHHmmssfff}",
                 CustomerId = request.CustomerId,
                 TerminalId = request.TerminalId,
+                CartDiscountType = request.DiscountAmount > 0 ? request.DiscountType : null,
+                CartDiscountPercentage = request.DiscountAmount > 0 ? request.DiscountPercentage : null,
                 CreatedAt = now
             };
 

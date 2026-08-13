@@ -326,7 +326,7 @@ export function POSPage() {
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, selectedTerminalId, notFoundBarcode, handleCloseNotFound]);
 
   const showSnack = (message: string, severity: "success" | "error" | "warning") => {
@@ -409,6 +409,8 @@ export function POSPage() {
       terminalId: selectedTerminalId,
       items: cart.map((i) => ({ productId: i.productId, quantity: i.quantity })),
       discountAmount: calculatedDiscount,
+      discountType: discountType === "percentage" ? 1 : 0,
+      discountPercentage: discountType === "percentage" ? parsedValue : null,
     });
   };
 
@@ -416,7 +418,7 @@ export function POSPage() {
   const subtotalOriginal = cart.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
   const totalProductDiscount = cart.reduce((sum, i) => sum + i.productDiscountAmount, 0);
   const subtotalAfterProductDiscount = subtotalOriginal - totalProductDiscount;
-  
+
   let calculatedDiscount = 0;
   const parsedValue = parseFloat(discountValue) || 0;
   if (parsedValue > 0) {
@@ -430,6 +432,7 @@ export function POSPage() {
 
   const total = subtotalAfterProductDiscount - calculatedDiscount;
   const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
+  const hasAnyDiscount = totalProductDiscount > 0 || calculatedDiscount > 0;
 
   const selectedTerminal = terminals.find((t) => t.id === selectedTerminalId);
 
@@ -634,112 +637,152 @@ export function POSPage() {
                     <TableCell sx={{ fontWeight: 700 }}>Ürün</TableCell>
                     <TableCell align="center" sx={{ fontWeight: 700, width: 120 }}>Miktar</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700, width: 110 }}>Birim Fiyat</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Toplam</TableCell>
+                    {hasAnyDiscount && (
+                      <TableCell align="right" sx={{ fontWeight: 700, width: 115 }}>Ara Toplam</TableCell>
+                    )}
+                    <TableCell align="right" sx={{ fontWeight: 700, width: 110 }}>Toplam</TableCell>
                     <TableCell align="center" sx={{ width: 48 }} />
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {cart.map((item, idx) => (
-                    <TableRow
-                      key={item.productId}
-                      sx={{
-                        animation: "fadeSlideIn 0.2s ease",
-                        "@keyframes fadeSlideIn": {
-                          from: { opacity: 0, transform: "translateY(-6px)" },
-                          to: { opacity: 1, transform: "translateY(0)" },
-                        },
-                        backgroundColor: idx % 2 === 0 ? "transparent" : "action.hover",
-                      }}
-                    >
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={600}>
-                          {item.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>
-                          {item.barcode}
-                        </Typography>
-                        {item.discountName && (
-                          <Chip
-                            label={`🏷️ ${item.discountName}${item.discountPercentage ? ` -%${item.discountPercentage}` : ""}`}
-                            size="small"
-                            color="success"
-                            variant="outlined"
-                            sx={{ mt: 0.5, height: 20, fontSize: "0.65rem", fontWeight: 600 }}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 0.5,
-                          }}
-                        >
-                          <IconButton
-                            size="small"
-                            id={`pos-dec-${item.productId}`}
-                            onClick={() => { updateQty(item.productId, -1); setTimeout(() => barcodeRef.current?.focus(), 50); }}
-                            sx={{ width: 26, height: 26 }}
-                          >
-                            <RemoveIcon sx={{ fontSize: 14 }} />
-                          </IconButton>
-                          <CartQuantityInput
-                            productId={item.productId}
-                            quantity={item.quantity}
-                            onSetQty={setQty}
-                            onFocusBarcode={() => setTimeout(() => barcodeRef.current?.focus(), 50)}
-                          />
-                          <IconButton
-                            size="small"
-                            id={`pos-inc-${item.productId}`}
-                            onClick={() => { updateQty(item.productId, 1); setTimeout(() => barcodeRef.current?.focus(), 50); }}
-                            sx={{ width: 26, height: 26 }}
-                          >
-                            <AddIcon sx={{ fontSize: 14 }} />
-                          </IconButton>
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right">
-                        {item.discountedPrice != null ? (
-                          <Box>
-                            <Typography variant="caption" sx={{ textDecoration: "line-through", opacity: 0.5 }}>
-                              {fmt(item.unitPrice)}
-                            </Typography>
-                            <Typography variant="body2" fontWeight={700} color="success.main">
-                              {fmt(item.discountedPrice)}
-                            </Typography>
-                          </Box>
-                        ) : (
-                          <Typography variant="body2">{fmt(item.unitPrice)}</Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography variant="body2" fontWeight={700} color="primary.main">
-                          {fmt(item.lineTotal)}
-                        </Typography>
-                        {item.productDiscountAmount > 0 && (
-                          <Typography variant="caption" color="success.main" fontWeight={600}>
-                            İnd: -{fmt(item.productDiscountAmount)}
+                  {cart.map((item, idx) => {
+                    const itemCartDiscount =
+                      calculatedDiscount > 0 && subtotalAfterProductDiscount > 0
+                        ? Math.round((item.lineTotal / subtotalAfterProductDiscount) * calculatedDiscount * 100) / 100
+                        : 0;
+                    const itemNetTotal = item.lineTotal - itemCartDiscount;
+                    return (
+                      <TableRow
+                        key={item.productId}
+                        sx={{
+                          animation: "fadeSlideIn 0.2s ease",
+                          "@keyframes fadeSlideIn": {
+                            from: { opacity: 0, transform: "translateY(-6px)" },
+                            to: { opacity: 1, transform: "translateY(0)" },
+                          },
+                          backgroundColor: idx % 2 === 0 ? "transparent" : "action.hover",
+                        }}
+                      >
+                        {/* Ürün */}
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>
+                            {item.name}
                           </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>
+                            {item.barcode}
+                          </Typography>
+                          {item.discountName && (
+                            <Chip
+                              label={`🏷️ ${item.discountName}${item.discountPercentage ? ` -%${item.discountPercentage}` : ""}`}
+                              size="small"
+                              color="success"
+                              variant="outlined"
+                              sx={{ mt: 0.5, height: 20, fontSize: "0.65rem", fontWeight: 600 }}
+                            />
+                          )}
+                        </TableCell>
+
+                        {/* Miktar */}
+                        <TableCell align="center">
+                          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5 }}>
+                            <IconButton
+                              size="small"
+                              id={`pos-dec-${item.productId}`}
+                              onClick={() => { updateQty(item.productId, -1); setTimeout(() => barcodeRef.current?.focus(), 50); }}
+                              sx={{ width: 26, height: 26 }}
+                            >
+                              <RemoveIcon sx={{ fontSize: 14 }} />
+                            </IconButton>
+                            <CartQuantityInput
+                              productId={item.productId}
+                              quantity={item.quantity}
+                              onSetQty={setQty}
+                              onFocusBarcode={() => setTimeout(() => barcodeRef.current?.focus(), 50)}
+                            />
+                            <IconButton
+                              size="small"
+                              id={`pos-inc-${item.productId}`}
+                              onClick={() => { updateQty(item.productId, 1); setTimeout(() => barcodeRef.current?.focus(), 50); }}
+                              sx={{ width: 26, height: 26 }}
+                            >
+                              <AddIcon sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Box>
+                        </TableCell>
+
+                        {/* Birim Fiyat */}
+                        <TableCell align="right">
+                          {item.discountedPrice != null ? (
+                            <Box>
+                              <Typography variant="caption" sx={{ textDecoration: "line-through", opacity: 0.45, display: "block" }}>
+                                {fmt(item.unitPrice)}
+                              </Typography>
+                              <Typography variant="body2" fontWeight={700} color="success.main">
+                                {fmt(item.discountedPrice)}
+                              </Typography>
+                            </Box>
+                          ) : (
+                            <Typography variant="body2">{fmt(item.unitPrice)}</Typography>
+                          )}
+                        </TableCell>
+
+                        {/* Ara Toplam — herhangi bir indirim varsa (ürün veya sepet) gösterilir */}
+                        {hasAnyDiscount && (
+                          <TableCell align="right">
+                            {/* Brüt tutar — ürün indirimi varsa üzeri çizili */}
+                            {item.productDiscountAmount > 0 ? (
+                              <>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ textDecoration: "line-through", opacity: 0.4, display: "block", lineHeight: 1.3 }}
+                                >
+                                  {fmt(item.quantity * item.unitPrice)}
+                                </Typography>
+                                <Typography variant="caption" color="success.main" fontWeight={600} display="block" sx={{ lineHeight: 1.3 }}>
+                                  -{fmt(item.productDiscountAmount)}
+                                </Typography>
+                                <Typography variant="body2" fontWeight={600} color="text.secondary" sx={{ lineHeight: 1.4 }}>
+                                  {fmt(item.lineTotal)}
+                                </Typography>
+                              </>
+                            ) : (
+                              <Typography variant="body2" fontWeight={600} color="text.secondary">
+                                {fmt(item.lineTotal)}
+                              </Typography>
+                            )}
+                            {/* Sepet indirimi payı */}
+                            {itemCartDiscount > 0 && (
+                              <Typography variant="caption" color="warning.main" fontWeight={600} display="block" sx={{ fontSize: "0.7rem", lineHeight: 1.3 }}>
+                                -{fmt(itemCartDiscount)}
+                              </Typography>
+                            )}
+                          </TableCell>
                         )}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="Ürünü Kaldır">
-                          <IconButton
-                            size="small"
-                            id={`pos-remove-${item.productId}`}
-                            onClick={() => { removeItem(item.productId); setTimeout(() => barcodeRef.current?.focus(), 50); }}
-                            color="error"
-                            sx={{ width: 26, height: 26 }}
-                          >
-                            <DeleteOutlineIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+
+                        {/* Toplam — her zaman sadece nihai net fiyat */}
+                        <TableCell align="right">
+                          <Typography variant="body2" fontWeight={800} color="primary.main">
+                            {fmt(itemNetTotal)}
+                          </Typography>
+                        </TableCell>
+
+                        {/* Sil */}
+                        <TableCell align="center">
+                          <Tooltip title="Ürünü Kaldır">
+                            <IconButton
+                              size="small"
+                              id={`pos-remove-${item.productId}`}
+                              onClick={() => { removeItem(item.productId); setTimeout(() => barcodeRef.current?.focus(), 50); }}
+                              color="error"
+                              sx={{ width: 26, height: 26 }}
+                            >
+                              <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -813,6 +856,8 @@ export function POSPage() {
             Sipariş Özeti
           </Typography>
 
+
+
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="body2" color="text.secondary">
@@ -838,7 +883,7 @@ export function POSPage() {
               <Typography variant="body2" color="text.secondary">
                 Sepet İndirimi
               </Typography>
-              <Typography variant="body2" fontWeight={600} color="success.main">
+              <Typography variant="body2" fontWeight={600} color="warning.main">
                 -{fmt(calculatedDiscount)}
               </Typography>
             </Box>

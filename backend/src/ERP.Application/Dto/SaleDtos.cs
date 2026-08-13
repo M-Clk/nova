@@ -8,6 +8,10 @@ public record SaleDto(
     decimal TotalAmount,
     decimal DiscountAmount,
     decimal NetAmount,
+    /// <summary>0 = Tutar, 1 = Yüzde, null = indirim yok</summary>
+    int? CartDiscountType,
+    /// <summary>Yüzde tipinde ise oran (ör. 10 = %10)</summary>
+    decimal? CartDiscountPercentage,
     DateTime CreatedAt,
     IReadOnlyList<SaleItemDto> Items);
 
