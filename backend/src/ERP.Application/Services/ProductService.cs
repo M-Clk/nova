@@ -24,9 +24,19 @@ public interface IProductService
     Task<int> RevertBulkPriceUpdateAsync(Guid batchId, string revertedBy, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PriceHistoryDto>> GetRecentPriceHistoryAsync(int limit = 20, CancellationToken cancellationToken = default);
     Task<ImportPriceResult> ImportPricesFromExcelAsync(Stream xlsxStream, string changedBy, CancellationToken cancellationToken = default);
+
+    // ─── Auto Categorization ─────────────────────────────────────────────────
+    Task<CategorySuggestionDto?> SuggestCategoryAsync(string productName, CancellationToken cancellationToken = default);
+    Task<BulkSuggestionResult> PreviewBulkCategorizationAsync(IReadOnlyList<Guid>? productIds, bool onlyUncategorized, CancellationToken cancellationToken = default);
+    Task<BulkCategoryUpdateResult> ApplyBulkCategorizationAsync(IReadOnlyList<Guid>? productIds, bool onlyUncategorized, CancellationToken cancellationToken = default);
+
+    // ─── Auto Brand Assignment ──────────────────────────────────────────────
+    Task<BrandSuggestionDto?> SuggestBrandAsync(string productName, CancellationToken cancellationToken = default);
+    Task<BulkBrandSuggestionResult> PreviewBulkBrandAssignmentAsync(IReadOnlyList<Guid>? productIds, bool onlyUnbranded, CancellationToken cancellationToken = default);
+    Task<BulkBrandUpdateResult> ApplyBulkBrandAssignmentAsync(IReadOnlyList<Guid>? productIds, bool onlyUnbranded, CancellationToken cancellationToken = default);
 }
 
-public class ProductService(IErpDbContext db) : IProductService
+public class ProductService(IErpDbContext db, IProductCategorizationDbService categorization, IProductBrandAssignmentDbService branding) : IProductService
 {
     public Task<IReadOnlyList<ProductDto>> GetAsync(CancellationToken cancellationToken = default)
     {
@@ -603,4 +613,43 @@ public class ProductService(IErpDbContext db) : IProductService
                 anyChange ? batchId : null, errors);
         }
     }
+
+    // ─── Auto Categorization ─────────────────────────────────────────────────
+
+    public Task<CategorySuggestionDto?> SuggestCategoryAsync(
+        string productName,
+        CancellationToken cancellationToken = default)
+        => categorization.SuggestAsync(productName, cancellationToken);
+
+    public Task<BulkSuggestionResult> PreviewBulkCategorizationAsync(
+        IReadOnlyList<Guid>? productIds,
+        bool onlyUncategorized,
+        CancellationToken cancellationToken = default)
+        => categorization.PreviewBulkAsync(productIds, onlyUncategorized, cancellationToken);
+
+    public Task<BulkCategoryUpdateResult> ApplyBulkCategorizationAsync(
+        IReadOnlyList<Guid>? productIds,
+        bool onlyUncategorized,
+        CancellationToken cancellationToken = default)
+        => categorization.ApplyBulkAsync(productIds, onlyUncategorized, cancellationToken);
+
+    // ─── Auto Brand Assignment ────────────────────────────────────────────────
+
+    public Task<BrandSuggestionDto?> SuggestBrandAsync(
+        string productName,
+        CancellationToken cancellationToken = default)
+        => branding.SuggestAsync(productName, cancellationToken);
+
+    public Task<BulkBrandSuggestionResult> PreviewBulkBrandAssignmentAsync(
+        IReadOnlyList<Guid>? productIds,
+        bool onlyUnbranded,
+        CancellationToken cancellationToken = default)
+        => branding.PreviewBulkAsync(productIds, onlyUnbranded, cancellationToken);
+
+    public Task<BulkBrandUpdateResult> ApplyBulkBrandAssignmentAsync(
+        IReadOnlyList<Guid>? productIds,
+        bool onlyUnbranded,
+        CancellationToken cancellationToken = default)
+        => branding.ApplyBulkAsync(productIds, onlyUnbranded, cancellationToken);
 }
+

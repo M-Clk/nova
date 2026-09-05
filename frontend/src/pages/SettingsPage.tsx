@@ -13,8 +13,6 @@ import {
   ListItemIcon,
   ListItemText,
   useTheme,
-  Tab,
-  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -117,33 +115,38 @@ function SettingsSection({
   icon: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const theme = useTheme();
   return (
-    <Paper
-      sx={{
-        p: 3,
-        borderRadius: 3,
-        border: 1,
-        borderColor: "divider"
-      }}
-    >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2.5 }}>
+    <Box>
+      {/* Section header */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+          mb: 3
+        }}
+      >
         <Avatar
           sx={{
-            bgcolor: "action.selected",
-            color: "primary.main",
-            width: 34,
-            height: 34
+            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+            color: "#fff",
+            width: 40,
+            height: 40,
+            boxShadow: `0 4px 14px ${theme.palette.primary.main}55`
           }}
         >
           {icon}
         </Avatar>
-        <Typography variant="subtitle1" fontWeight={700}>
-          {title}
-        </Typography>
+        <Box>
+          <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
+            {title}
+          </Typography>
+        </Box>
       </Box>
-      <Divider sx={{ mb: 2.5 }} />
+      <Divider sx={{ mb: 3, opacity: 0.6 }} />
       {children}
-    </Paper>
+    </Box>
   );
 }
 
@@ -1822,23 +1825,24 @@ function CompanyInfoTab() {
 
 export function SettingsPage() {
   const { user } = useAuth();
+  const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
 
   const tabsConfig = useMemo(() => {
     const list = [
       {
         label: "Profil",
-        icon: <PersonOutlinedIcon fontSize="small" />,
+        icon: <PersonOutlinedIcon />,
         component: <SettingsSection title="Profil Bilgileri" icon={<PersonOutlinedIcon fontSize="small" />}><ProfileTabContent /></SettingsSection>
       },
       {
         label: "Görünüm",
-        icon: <PaletteOutlinedIcon fontSize="small" />,
+        icon: <PaletteOutlinedIcon />,
         component: <SettingsSection title="Görünüm" icon={<PaletteOutlinedIcon fontSize="small" />}><AppearanceTabContent /></SettingsSection>
       },
       {
         label: "Şirket Bilgileri",
-        icon: <ReceiptOutlinedIcon fontSize="small" />,
+        icon: <ReceiptOutlinedIcon />,
         component: <SettingsSection title="Şirket / İşletme Bilgileri" icon={<ReceiptOutlinedIcon fontSize="small" />}><CompanyInfoTab /></SettingsSection>
       }
     ];
@@ -1847,25 +1851,22 @@ export function SettingsPage() {
       list.push(
         {
           label: "Depolar",
-          icon: <BusinessOutlinedIcon fontSize="small" />,
+          icon: <BusinessOutlinedIcon />,
           component: <SettingsSection title="Depolar" icon={<BusinessOutlinedIcon fontSize="small" />}><WarehousesTab /></SettingsSection>
         },
         {
           label: "Kasalar",
-          icon: <PointOfSaleOutlinedIcon fontSize="small" />,
+          icon: <PointOfSaleOutlinedIcon />,
           component: <SettingsSection title="Kasalar" icon={<PointOfSaleOutlinedIcon fontSize="small" />}><TerminalsTab /></SettingsSection>
         },
         {
           label: "Lisans",
-          icon: <KeyIcon fontSize="small" />,
+          icon: <KeyIcon />,
           component: <SettingsSection title="Lisans Bilgileri" icon={<KeyIcon fontSize="small" />}><LicenseTabContent /></SettingsSection>
-        }
-      );
-
-      list.push(
+        },
         {
           label: "Sistem Güncelleme",
-          icon: <SystemUpdateAltIcon fontSize="small" />,
+          icon: <SystemUpdateAltIcon />,
           component: <SettingsSection title="Sistem Bilgileri ve Güncelleme" icon={<DnsOutlinedIcon fontSize="small" />}><SystemTabContent /></SettingsSection>
         }
       );
@@ -1875,17 +1876,17 @@ export function SettingsPage() {
       list.push(
         {
           label: "Kategoriler",
-          icon: <CategoryOutlinedIcon fontSize="small" />,
+          icon: <CategoryOutlinedIcon />,
           component: <SettingsSection title="Kategoriler" icon={<CategoryOutlinedIcon fontSize="small" />}><CategoriesTab /></SettingsSection>
         },
         {
           label: "Markalar",
-          icon: <StarOutlineIcon fontSize="small" />,
+          icon: <StarOutlineIcon />,
           component: <SettingsSection title="Markalar" icon={<StarOutlineIcon fontSize="small" />}><BrandsTab /></SettingsSection>
         },
         {
           label: "Ölçü Birimleri",
-          icon: <Inventory2OutlinedIcon fontSize="small" />,
+          icon: <Inventory2OutlinedIcon />,
           component: <SettingsSection title="Ölçü Birimleri" icon={<Inventory2OutlinedIcon fontSize="small" />}><UnitsTab /></SettingsSection>
         }
       );
@@ -1894,40 +1895,159 @@ export function SettingsPage() {
     return list;
   }, [user]);
 
+  const isDark = theme.palette.mode === "dark";
+
   return (
-    <Stack spacing={3} sx={{ maxWidth: 800 }}>
-      {/* Page Header */}
-      <Box>
-        <Typography variant="h4" fontWeight={800} letterSpacing="-0.02em" sx={{ mb: 0.5 }}>
-          Ayarlar
-        </Typography>
-        <Typography color="text.secondary" variant="body1">
-          Kullanıcı tercihlerinizi ve sistem tanımlamalarını buradan yönetebilirsiniz.
-        </Typography>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 3, minHeight: "100%" }}>
+
+      {/* ── Page Header ─────────────────────────────────────────────────────── */}
+      <Box
+        sx={{
+          borderRadius: 3,
+          p: { xs: 2.5, sm: 3.5 },
+          background: isDark
+            ? `linear-gradient(135deg, ${theme.palette.primary.dark}33 0%, ${theme.palette.background.paper} 100%)`
+            : `linear-gradient(135deg, ${theme.palette.primary.main}18 0%, ${theme.palette.background.paper} 100%)`,
+          border: 1,
+          borderColor: isDark ? `${theme.palette.primary.main}33` : `${theme.palette.primary.main}22`,
+          position: "relative",
+          overflow: "hidden",
+          "&::before": {
+            content: '""',
+            position: "absolute",
+            top: -40,
+            right: -40,
+            width: 180,
+            height: 180,
+            borderRadius: "50%",
+            background: `radial-gradient(circle, ${theme.palette.primary.main}22 0%, transparent 70%)`,
+            pointerEvents: "none"
+          }
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Avatar
+            sx={{
+              width: 52,
+              height: 52,
+              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+              boxShadow: `0 8px 24px ${theme.palette.primary.main}55`,
+              fontSize: "1.4rem"
+            }}
+          >
+            ⚙️
+          </Avatar>
+          <Box>
+            <Typography variant="h4" fontWeight={800} letterSpacing="-0.02em" lineHeight={1.1}>
+              Ayarlar
+            </Typography>
+            <Typography color="text.secondary" variant="body2" sx={{ mt: 0.5 }}>
+              Kullanıcı tercihlerinizi ve sistem tanımlamalarını buradan yönetebilirsiniz.
+            </Typography>
+          </Box>
+        </Box>
       </Box>
 
-      {/* Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tabs
-          value={activeTab}
-          onChange={(_, v) => setActiveTab(v)}
+      {/* ── Two-column layout ────────────────────────────────────────────────── */}
+      <Box
+        sx={{
+          display: "flex",
+          gap: 3,
+          alignItems: "flex-start",
+          flexDirection: { xs: "column", md: "row" }
+        }}
+      >
+        {/* ── Left Sidebar Nav ─────────────────────────────────────────────── */}
+        <Paper
           sx={{
-            "& .MuiTab-root": {
-              textTransform: "none",
-              fontWeight: 600,
-              fontSize: "0.9rem",
-              minHeight: 44
-            }
+            width: { xs: "100%", md: 220 },
+            flexShrink: 0,
+            borderRadius: 3,
+            border: 1,
+            borderColor: "divider",
+            overflow: "hidden",
+            position: { md: "sticky" },
+            top: { md: 80 }
           }}
         >
-          {tabsConfig.map((tab: any, index: number) => (
-            <Tab key={index} icon={tab.icon} iconPosition="start" label={tab.label} />
-          ))}
-        </Tabs>
-      </Box>
+          <Box sx={{ p: 1.5 }}>
+            <Typography
+              variant="caption"
+              fontWeight={700}
+              color="text.disabled"
+              sx={{ px: 1, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", mb: 0.5 }}
+            >
+              Menü
+            </Typography>
+            {tabsConfig.map((tab: any, index: number) => {
+              const isActive = activeTab === index;
+              return (
+                <Box
+                  key={index}
+                  onClick={() => setActiveTab(index)}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.5,
+                    px: 1.5,
+                    py: 1.1,
+                    borderRadius: 2,
+                    mb: 0.3,
+                    cursor: "pointer",
+                    userSelect: "none",
+                    transition: "all 0.18s ease",
+                    backgroundColor: isActive
+                      ? isDark ? `${theme.palette.primary.main}22` : `${theme.palette.primary.main}12`
+                      : "transparent",
+                    color: isActive ? "primary.main" : "text.secondary",
+                    fontWeight: isActive ? 700 : 500,
+                    borderLeft: isActive ? `3px solid ${theme.palette.primary.main}` : "3px solid transparent",
+                    "&:hover": {
+                      backgroundColor: isDark ? `${theme.palette.primary.main}18` : `${theme.palette.primary.main}10`,
+                      color: "primary.main"
+                    }
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      color: isActive ? "primary.main" : "text.secondary",
+                      "& svg": { fontSize: "1.15rem" }
+                    }}
+                  >
+                    {tab.icon}
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    fontWeight={isActive ? 700 : 500}
+                    fontSize="0.875rem"
+                    color="inherit"
+                    noWrap
+                  >
+                    {tab.label}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Box>
+        </Paper>
 
-      {/* Render Active Tab Component */}
-      {tabsConfig[activeTab]?.component}
-    </Stack>
+        {/* ── Right Content Area ───────────────────────────────────────────── */}
+        <Paper
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            borderRadius: 3,
+            border: 1,
+            borderColor: "divider",
+            p: { xs: 2.5, sm: 3.5 },
+            animation: "fadeIn 0.25s ease"
+          }}
+        >
+          {tabsConfig[activeTab]?.component}
+        </Paper>
+      </Box>
+    </Box>
   );
 }

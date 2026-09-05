@@ -19,6 +19,16 @@ public static class DependencyInjection
         services.AddScoped<IWarehouseService, WarehouseService>();
         services.AddScoped<IDiscountService, DiscountService>();
 
+        // ─── Auto Categorization ──────────────────────────────────────────────
+        // Kural motoru: Singleton (statik, thread-safe, DB bağlantısı yok)
+        services.AddSingleton<IProductCategorizationService, ProductCategorizationService>();
+        // DB wrapper: Scoped (DB erişimi var, kategori oluşturabilir)
+        services.AddScoped<IProductCategorizationDbService, ProductCategorizationDbService>();
+
+        // ─── Auto Brand Assignment ─────────────────────────────────────────────────────
+        services.AddSingleton<IProductBrandSuggestionService, ProductBrandSuggestionService>();
+        services.AddScoped<IProductBrandAssignmentDbService, ProductBrandAssignmentDbService>();
+
         // ─── Report Exporters (Strategy Pattern) ─────────────────────────
         // Yeni format eklemek için: services.AddScoped<IReportExporter, PdfReportExporter>();
         services.AddScoped<IReportExporter, CsvReportExporter>();

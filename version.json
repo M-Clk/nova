@@ -1,5 +1,5 @@
 {
-  "version": "1.4.2",
-  "releaseNotes": "Urun listeleme ekranına Excel ile toplu fiyat güncellemesi özelliği eklendi.",
+  "version": "1.4.3",
+  "releaseNotes": "Urun listeleme ekranına otomatik marka ve kategori atama özelliği eklendi.",
   "releaseDate": "2026-09-05"
 }

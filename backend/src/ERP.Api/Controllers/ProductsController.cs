@@ -152,5 +152,132 @@ public class ProductsController(IProductService products, IPosService pos) : Con
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    // ─── Auto Categorization ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Verilen ürün adı için kategori önerisi döner. DB güncellenmez.
+    /// </summary>
+    [HttpPost("suggest-category")]
+    public async Task<IActionResult> SuggestCategory(
+        [FromBody] SuggestCategoryRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.ProductName))
+            return BadRequest(new { error = "Ürün adı boş olamaz." });
+
+        var suggestion = await products.SuggestCategoryAsync(request.ProductName, cancellationToken);
+
+        if (suggestion is null)
+            return Ok(new { matched = false, message = "Ürün adıyla eşleşen bir kural bulunamadı." });
+
+        return Ok(new { matched = true, suggestion });
+    }
+
+    /// <summary>
+    /// Seçili (veya tüm) ürünler için kategori önerilerini önizler. Herhangi bir değişiklik yapmaz.
+    /// </summary>
+    [HttpPost("preview-categorization")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> PreviewCategorization(
+        [FromBody] BulkCategorizationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await products.PreviewBulkCategorizationAsync(
+            request.ProductIds,
+            request.OnlyUncategorized,
+            cancellationToken);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Kural motorunu çalıştırır ve ürün kategorilerini günceller.
+    /// Eksik kategoriler otomatik olarak oluşturulur.
+    /// Tarayıcıdan doğrudan çağrılabilir:
+    ///   GET /api/products/apply-categorization?onlyUncategorized=true
+    /// </summary>
+    [HttpGet("apply-categorization")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> ApplyCategorization(
+        [FromQuery] bool onlyUncategorized = true,
+        [FromQuery] List<Guid>? productIds = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await products.ApplyBulkCategorizationAsync(
+                productIds?.Count > 0 ? productIds : null,
+                onlyUncategorized,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    // ─── Auto Brand Assignment ────────────────────────────────────────────────
+
+    /// <summary>Verilen ürün adı için marka önerisi döner. DB güncellenmez.</summary>
+    [HttpPost("suggest-brand")]
+    public async Task<IActionResult> SuggestBrand(
+        [FromBody] SuggestBrandRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.ProductName))
+            return BadRequest(new { error = "Ürün adı boş olamaz." });
+
+        var suggestion = await products.SuggestBrandAsync(request.ProductName, cancellationToken);
+
+        if (suggestion is null)
+            return Ok(new { matched = false, message = "Ürün adıyla eşleşen bir marka bulunamadı." });
+
+        return Ok(new { matched = true, suggestion });
+    }
+
+    /// <summary>Seçili (veya tüm) ürünler için marka önerilerini önizler. Değişiklik yapmaz.</summary>
+    [HttpPost("preview-brand-assignment")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> PreviewBrandAssignment(
+        [FromBody] BulkBrandAssignmentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await products.PreviewBulkBrandAssignmentAsync(
+            request.ProductIds,
+            request.OnlyUnbranded,
+            cancellationToken);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Marka atamalarını uygular. Eksik markalar otomatik oluşturulur.
+    /// Tarayıcı Console'undan:
+    ///   fetch('/api/products/apply-brand-assignment?onlyUnbranded=true', { headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` } }).then(r=>r.json()).then(console.log)
+    /// </summary>
+    [HttpGet("apply-brand-assignment")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> ApplyBrandAssignment(
+        [FromQuery] bool onlyUnbranded = true,
+        [FromQuery] List<Guid>? productIds = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await products.ApplyBulkBrandAssignmentAsync(
+                productIds?.Count > 0 ? productIds : null,
+                onlyUnbranded,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }
 
