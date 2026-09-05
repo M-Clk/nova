@@ -413,11 +413,10 @@ export type PriceHistoryDto = {
   createdAt: string;
 };
 
-// ─── CSV Price Import Types ───────────────────────────────────────────────────
+// ─── Excel Price Import Types ─────────────────────────────────────────────────
 
 export type ImportPriceErrorRow = {
   rowNumber: number;
-  rawLine: string;
   reason: string;
 };
 

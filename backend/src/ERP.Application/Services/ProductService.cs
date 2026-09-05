@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using ERP.Application.Abstractions;
 using ERP.Application.Dto;
 using ERP.Domain.Entities;
@@ -14,7 +15,6 @@ public interface IProductService
     Task<bool> UpdateAsync(Guid id, UpdateProductRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ExportResult> ExportProductsAsync(
-        string format,
         string? search,
         Guid? brandId,
         Guid? categoryId,
@@ -23,10 +23,10 @@ public interface IProductService
     Task<BulkPriceUpdateResult> BulkUpdatePricesAsync(BulkPriceUpdateRequest request, string changedBy, CancellationToken cancellationToken = default);
     Task<int> RevertBulkPriceUpdateAsync(Guid batchId, string revertedBy, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PriceHistoryDto>> GetRecentPriceHistoryAsync(int limit = 20, CancellationToken cancellationToken = default);
-    Task<ImportPriceResult> ImportPricesFromCsvAsync(Stream csvStream, string changedBy, CancellationToken cancellationToken = default);
+    Task<ImportPriceResult> ImportPricesFromExcelAsync(Stream xlsxStream, string changedBy, CancellationToken cancellationToken = default);
 }
 
-public class ProductService(IErpDbContext db, IReportExporterFactory exporterFactory) : IProductService
+public class ProductService(IErpDbContext db) : IProductService
 {
     public Task<IReadOnlyList<ProductDto>> GetAsync(CancellationToken cancellationToken = default)
     {
@@ -150,7 +150,6 @@ public class ProductService(IErpDbContext db, IReportExporterFactory exporterFac
     }
 
     public async Task<ExportResult> ExportProductsAsync(
-        string format,
         string? search,
         Guid? brandId,
         Guid? categoryId,
@@ -162,59 +161,97 @@ public class ProductService(IErpDbContext db, IReportExporterFactory exporterFac
         if (!string.IsNullOrWhiteSpace(search))
         {
             var cleanSearch = search.Trim().ToLower();
-            query = query.Where(x => 
-                x.Code.ToLower().Contains(cleanSearch) || 
-                x.Name.ToLower().Contains(cleanSearch) || 
+            query = query.Where(x =>
+                x.Code.ToLower().Contains(cleanSearch) ||
+                x.Name.ToLower().Contains(cleanSearch) ||
                 x.Barcode.ToLower().Contains(cleanSearch)
             );
         }
 
         if (brandId.HasValue)
-        {
             query = query.Where(x => x.BrandId == brandId.Value);
-        }
 
         if (categoryId.HasValue)
-        {
             query = query.Where(x => x.CategoryId == categoryId.Value);
-        }
 
         if (isActive.HasValue)
-        {
             query = query.Where(x => x.IsActive == isActive.Value);
-        }
 
         query = query.OrderBy(x => x.Name);
 
         var list = await ProductQuery(query).ToListAsync(cancellationToken);
-        var exporter = exporterFactory.GetExporter(format);
 
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Ürünler");
+
+        // ── Başlık satırı ──────────────────────────────────────────────────────
         var headers = new[]
         {
             "Ürün Kodu", "Barkod", "Ürün Adı", "Marka", "Kategori",
             "Birim", "Alış Fiyatı", "Satış Fiyatı", "Min. Stok", "Durum"
         };
 
-        var rows = list.Select(item => new[]
+        for (int col = 1; col <= headers.Length; col++)
         {
-            item.Code,
-            // Barkod: Excel'in sayıya çevirip bilimsel gösterime dönüştürmemesi için ="..." formatı
-            string.IsNullOrWhiteSpace(item.Barcode) ? "" : "=\"" + item.Barcode + "\"",
-            item.Name,
-            item.BrandName,
-            item.CategoryName,
-            item.UnitName,
-            // InvariantCulture: ondalık ayırıcı nokta (62.50), CSV'de virgülle karışmasın
-            item.PurchasePrice.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-            item.SalePrice.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-            item.MinStock.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-            item.IsActive ? "Aktif" : "Pasif"
-        });
+            var cell = ws.Cell(1, col);
+            cell.Value = headers[col - 1];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#4472C4");
+            cell.Style.Font.FontColor = XLColor.White;
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        }
 
-        var content = exporter.Export(headers, rows);
-        var fileName = $"urunler_{DateTime.UtcNow:yyyyMMdd_HHmmss}{exporter.FileExtension}";
+        // ── Veri satırları ─────────────────────────────────────────────────────
+        // Fiyat sütunları: G=7 (Alış), H=8 (Satış)
+        const int colAlış = 7;
+        const int colSatış = 8;
 
-        return new ExportResult(content, exporter.ContentType, fileName);
+        for (int row = 0; row < list.Count; row++)
+        {
+            var item = list[row];
+            int xlRow = row + 2; // başlık 1. satırda
+
+            ws.Cell(xlRow, 1).Value = item.Code;
+
+            // Barkod: metin olarak sakla (sayıya çevrilmesini önle)
+            var barcodeCell = ws.Cell(xlRow, 2);
+            barcodeCell.Value = item.Barcode ?? "";
+            barcodeCell.Style.NumberFormat.NumberFormatId = 49; // @ — text
+
+            ws.Cell(xlRow, 3).Value = item.Name;
+            ws.Cell(xlRow, 4).Value = item.BrandName;
+            ws.Cell(xlRow, 5).Value = item.CategoryName;
+            ws.Cell(xlRow, 6).Value = item.UnitName;
+
+            var alışCell = ws.Cell(xlRow, colAlış);
+            alışCell.Value = (double)item.PurchasePrice;
+            alışCell.Style.NumberFormat.Format = "#,##0.00";
+
+            var satışCell = ws.Cell(xlRow, colSatış);
+            satışCell.Value = (double)item.SalePrice;
+            satışCell.Style.NumberFormat.Format = "#,##0.00";
+
+            ws.Cell(xlRow, 9).Value = (double)item.MinStock;
+            ws.Cell(xlRow, 10).Value = item.IsActive ? "Aktif" : "Pasif";
+        }
+
+        // ── Sütun genişlikleri ─────────────────────────────────────────────────
+        ws.Columns().AdjustToContents();
+        // Fiyat sütunlarının minimum genişliği
+        if (ws.Column(colAlış).Width < 14) ws.Column(colAlış).Width = 14;
+        if (ws.Column(colSatış).Width < 14) ws.Column(colSatış).Width = 14;
+
+        // ── Freeze top row ─────────────────────────────────────────────────────
+        ws.SheetView.FreezeRows(1);
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+        var content = ms.ToArray();
+
+        var fileName = $"urunler_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx";
+        const string contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+        return new ExportResult(content, contentType, fileName);
     }
 
     private IQueryable<ProductDto> ProductQuery(IQueryable<Product> query)
@@ -381,187 +418,189 @@ public class ProductService(IErpDbContext db, IReportExporterFactory exporterFac
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<ImportPriceResult> ImportPricesFromCsvAsync(
-        Stream csvStream,
+    public async Task<ImportPriceResult> ImportPricesFromExcelAsync(
+        Stream xlsxStream,
         string changedBy,
         CancellationToken cancellationToken = default)
     {
-        using var reader = new StreamReader(csvStream, System.Text.Encoding.UTF8);
         var errors = new List<ImportPriceErrorRow>();
-        var updateItems = new List<BulkPriceUpdateItem>();
 
-        // ── 1. Header satırını oku ve kolon indekslerini bul ──────────────────
-        var headerLine = await reader.ReadLineAsync(cancellationToken);
-        if (string.IsNullOrWhiteSpace(headerLine))
+        // ── 1. Workbook'u aç ──────────────────────────────────────────────────
+        XLWorkbook workbook;
+        try
+        {
+            workbook = new XLWorkbook(xlsxStream);
+        }
+        catch (Exception ex)
+        {
             return new ImportPriceResult(0, 0, 1, null,
-                [new ImportPriceErrorRow(0, "", "CSV dosyası boş veya geçersiz.")]
+                [new ImportPriceErrorRow(0, $"Excel dosyası açılamadı: {ex.Message}")]
             );
-
-        var headers = ParseCsvLine(headerLine);
-        int codeIdx      = Array.FindIndex(headers, h => h.Equals("Ürün Kodu",    StringComparison.OrdinalIgnoreCase));
-        int purchaseIdx  = Array.FindIndex(headers, h => h.Equals("Alış Fiyatı",  StringComparison.OrdinalIgnoreCase));
-        int saleIdx      = Array.FindIndex(headers, h => h.Equals("Satış Fiyatı", StringComparison.OrdinalIgnoreCase));
-
-        if (codeIdx < 0 || (purchaseIdx < 0 && saleIdx < 0))
-            return new ImportPriceResult(0, 0, 1, null,
-                [new ImportPriceErrorRow(1, headerLine, "Gerekli kolon bulunamadı: 'Ürün Kodu' ve 'Alış Fiyatı' / 'Satış Fiyatı'.")]
-            );
-
-        // ── 2. Veri satırlarını oku ──────────────────────────────────────────
-        var csvRows = new List<(int Row, string Code, decimal? Purchase, decimal? Sale)>();
-        int rowNumber = 1;
-
-        string? line;
-        while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
-        {
-            rowNumber++;
-            if (string.IsNullOrWhiteSpace(line)) continue;
-
-            var cols = ParseCsvLine(line);
-            if (cols.Length <= codeIdx)
-            {
-                errors.Add(new ImportPriceErrorRow(rowNumber, line, "Satır beklenen kolon sayısından kısa."));
-                continue;
-            }
-
-            var code = cols[codeIdx].Trim();
-            if (string.IsNullOrEmpty(code))
-            {
-                errors.Add(new ImportPriceErrorRow(rowNumber, line, "Ürün Kodu boş."));
-                continue;
-            }
-
-            decimal? purchase = null;
-            decimal? sale     = null;
-
-            if (purchaseIdx >= 0 && purchaseIdx < cols.Length)
-            {
-                var raw = cols[purchaseIdx].Trim().Replace(",", ".");
-                if (decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
-                                     System.Globalization.CultureInfo.InvariantCulture, out var p))
-                    purchase = p;
-                else if (!string.IsNullOrWhiteSpace(raw))
-                    errors.Add(new ImportPriceErrorRow(rowNumber, line, $"Alış fiyatı okunamadı: '{raw}'"));
-            }
-
-            if (saleIdx >= 0 && saleIdx < cols.Length)
-            {
-                var raw = cols[saleIdx].Trim().Replace(",", ".");
-                if (decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
-                                     System.Globalization.CultureInfo.InvariantCulture, out var s))
-                    sale = s;
-                else if (!string.IsNullOrWhiteSpace(raw))
-                    errors.Add(new ImportPriceErrorRow(rowNumber, line, $"Satış fiyatı okunamadı: '{raw}'"));
-            }
-
-            if (purchase.HasValue || sale.HasValue)
-                csvRows.Add((rowNumber, code, purchase, sale));
         }
 
-        if (csvRows.Count == 0)
-            return new ImportPriceResult(0, 0, errors.Count, null, errors);
-
-        // ── 3. Ürünleri DB'den tek sorguda çek ───────────────────────────────
-        var codes = csvRows.Select(r => r.Code).Distinct().ToList();
-        var dbProducts = await db.Products
-            .Where(x => codes.Contains(x.Code))
-            .ToListAsync(cancellationToken);
-
-        var productByCode = dbProducts.ToDictionary(p => p.Code, StringComparer.OrdinalIgnoreCase);
-
-        // ── 4. Sadece değişen fiyatları güncelle ─────────────────────────────
-        var batchId   = Guid.NewGuid();
-        int updated   = 0;
-        int skipped   = 0;
-        bool anyChange = false;
-
-        foreach (var (row, code, purchase, sale) in csvRows)
+        using (workbook)
         {
-            if (!productByCode.TryGetValue(code, out var product))
+            var ws = workbook.Worksheets.FirstOrDefault();
+            if (ws is null)
+                return new ImportPriceResult(0, 0, 1, null,
+                    [new ImportPriceErrorRow(0, "Excel dosyasında sayfa (worksheet) bulunamadı.")]
+                );
+
+            // ── 2. Başlık satırından kolon indekslerini bul ───────────────────
+            // ClosedXML: satır/sütun 1-tabanlı
+            var headerRow = ws.Row(1);
+            int lastHeaderCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+
+            int codeCol     = 0;
+            int purchaseCol = 0;
+            int saleCol     = 0;
+
+            for (int col = 1; col <= lastHeaderCol; col++)
             {
-                errors.Add(new ImportPriceErrorRow(row, code, $"Ürün bulunamadı: '{code}'"));
-                continue;
+                var headerVal = headerRow.Cell(col).GetString().Trim();
+                if (headerVal.Equals("Ürün Kodu",    StringComparison.OrdinalIgnoreCase)) codeCol     = col;
+                if (headerVal.Equals("Alış Fiyatı",  StringComparison.OrdinalIgnoreCase)) purchaseCol = col;
+                if (headerVal.Equals("Satış Fiyatı", StringComparison.OrdinalIgnoreCase)) saleCol     = col;
             }
 
-            var newPurchase = purchase.HasValue && purchase.Value != product.PurchasePrice ? purchase : null;
-            var newSale     = sale.HasValue     && sale.Value     != product.SalePrice     ? sale     : null;
+            if (codeCol == 0 || (purchaseCol == 0 && saleCol == 0))
+                return new ImportPriceResult(0, 0, 1, null,
+                    [new ImportPriceErrorRow(1, "Gerekli kolon bulunamadı: 'Ürün Kodu' ve 'Alış Fiyatı' / 'Satış Fiyatı' başlığı olmalıdır.")]
+                );
 
-            if (newPurchase is null && newSale is null)
+            // ── 3. Veri satırlarını oku ───────────────────────────────────────
+            int lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
+            var xlRows = new List<(int XlRow, string Code, decimal? Purchase, decimal? Sale)>();
+
+            for (int xlRow = 2; xlRow <= lastRow; xlRow++)
             {
-                skipped++;
-                continue;
-            }
+                var row = ws.Row(xlRow);
 
-            if (newPurchase.HasValue && newPurchase.Value < 0)
-            {
-                errors.Add(new ImportPriceErrorRow(row, code, "Alış fiyatı negatif olamaz."));
-                continue;
-            }
-            if (newSale.HasValue && newSale.Value < 0)
-            {
-                errors.Add(new ImportPriceErrorRow(row, code, "Satış fiyatı negatif olamaz."));
-                continue;
-            }
+                // Boş satırları atla
+                if (row.IsEmpty()) continue;
 
-            db.PriceHistories.Add(new ERP.Domain.Entities.PriceHistory
-            {
-                Id                = Guid.NewGuid(),
-                ProductId         = product.Id,
-                OldPurchasePrice  = product.PurchasePrice,
-                OldSalePrice      = product.SalePrice,
-                NewPurchasePrice  = newPurchase ?? product.PurchasePrice,
-                NewSalePrice      = newSale     ?? product.SalePrice,
-                ChangedBy         = changedBy,
-                BatchId           = batchId,
-                CreatedAt         = DateTime.UtcNow
-            });
-
-            if (newPurchase.HasValue) product.PurchasePrice = newPurchase.Value;
-            if (newSale.HasValue)     product.SalePrice     = newSale.Value;
-
-            updated++;
-            anyChange = true;
-        }
-
-        if (anyChange)
-            await db.SaveChangesAsync(cancellationToken);
-
-        return new ImportPriceResult(updated, skipped, errors.Count,
-            anyChange ? batchId : null, errors);
-    }
-
-    // RFC 4180 uyumlu basit CSV satır parser'ı
-    private static string[] ParseCsvLine(string line)
-    {
-        var result = new List<string>();
-        var current = new System.Text.StringBuilder();
-        bool inQuotes = false;
-
-        for (int i = 0; i < line.Length; i++)
-        {
-            char c = line[i];
-            if (c == '"')
-            {
-                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                var code = row.Cell(codeCol).GetString().Trim();
+                if (string.IsNullOrEmpty(code))
                 {
-                    current.Append('"'); i++; // escaped quote
+                    errors.Add(new ImportPriceErrorRow(xlRow, "Ürün Kodu boş."));
+                    continue;
                 }
-                else
+
+                decimal? purchase = null;
+                decimal? sale     = null;
+
+                if (purchaseCol > 0)
                 {
-                    inQuotes = !inQuotes;
+                    var cell = row.Cell(purchaseCol);
+                    if (!cell.IsEmpty())
+                    {
+                        if (cell.TryGetValue(out double pDouble))
+                            purchase = (decimal)pDouble;
+                        else
+                        {
+                            var raw = cell.GetString().Trim().Replace(",", ".");
+                            if (decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
+                                                 System.Globalization.CultureInfo.InvariantCulture, out var p))
+                                purchase = p;
+                            else
+                                errors.Add(new ImportPriceErrorRow(xlRow, $"Alış fiyatı okunamadı: '{raw}'"));
+                        }
+                    }
                 }
+
+                if (saleCol > 0)
+                {
+                    var cell = row.Cell(saleCol);
+                    if (!cell.IsEmpty())
+                    {
+                        if (cell.TryGetValue(out double sDouble))
+                            sale = (decimal)sDouble;
+                        else
+                        {
+                            var raw = cell.GetString().Trim().Replace(",", ".");
+                            if (decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
+                                                 System.Globalization.CultureInfo.InvariantCulture, out var s))
+                                sale = s;
+                            else
+                                errors.Add(new ImportPriceErrorRow(xlRow, $"Satış fiyatı okunamadı: '{raw}'"));
+                        }
+                    }
+                }
+
+                if (purchase.HasValue || sale.HasValue)
+                    xlRows.Add((xlRow, code, purchase, sale));
             }
-            else if (c == ',' && !inQuotes)
+
+            if (xlRows.Count == 0)
+                return new ImportPriceResult(0, 0, errors.Count, null, errors);
+
+            // ── 4. Ürünleri DB'den tek sorguda çek ───────────────────────────
+            var codes = xlRows.Select(r => r.Code).Distinct().ToList();
+            var dbProducts = await db.Products
+                .Where(x => codes.Contains(x.Code))
+                .ToListAsync(cancellationToken);
+
+            var productByCode = dbProducts.ToDictionary(p => p.Code, StringComparer.OrdinalIgnoreCase);
+
+            // ── 5. Sadece değişen fiyatları güncelle ─────────────────────────
+            var batchId    = Guid.NewGuid();
+            int updated    = 0;
+            int skipped    = 0;
+            bool anyChange = false;
+
+            foreach (var (xlRow, code, purchase, sale) in xlRows)
             {
-                result.Add(current.ToString());
-                current.Clear();
+                if (!productByCode.TryGetValue(code, out var product))
+                {
+                    errors.Add(new ImportPriceErrorRow(xlRow, $"Ürün bulunamadı: '{code}'"));
+                    continue;
+                }
+
+                var newPurchase = purchase.HasValue && purchase.Value != product.PurchasePrice ? purchase : null;
+                var newSale     = sale.HasValue     && sale.Value     != product.SalePrice     ? sale     : null;
+
+                if (newPurchase is null && newSale is null)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                if (newPurchase.HasValue && newPurchase.Value < 0)
+                {
+                    errors.Add(new ImportPriceErrorRow(xlRow, "Alış fiyatı negatif olamaz."));
+                    continue;
+                }
+                if (newSale.HasValue && newSale.Value < 0)
+                {
+                    errors.Add(new ImportPriceErrorRow(xlRow, "Satış fiyatı negatif olamaz."));
+                    continue;
+                }
+
+                db.PriceHistories.Add(new ERP.Domain.Entities.PriceHistory
+                {
+                    Id               = Guid.NewGuid(),
+                    ProductId        = product.Id,
+                    OldPurchasePrice = product.PurchasePrice,
+                    OldSalePrice     = product.SalePrice,
+                    NewPurchasePrice = newPurchase ?? product.PurchasePrice,
+                    NewSalePrice     = newSale     ?? product.SalePrice,
+                    ChangedBy        = changedBy,
+                    BatchId          = batchId,
+                    CreatedAt        = DateTime.UtcNow
+                });
+
+                if (newPurchase.HasValue) product.PurchasePrice = newPurchase.Value;
+                if (newSale.HasValue)     product.SalePrice     = newSale.Value;
+
+                updated++;
+                anyChange = true;
             }
-            else
-            {
-                current.Append(c);
-            }
+
+            if (anyChange)
+                await db.SaveChangesAsync(cancellationToken);
+
+            return new ImportPriceResult(updated, skipped, errors.Count,
+                anyChange ? batchId : null, errors);
         }
-        result.Add(current.ToString());
-        return [.. result];
     }
 }

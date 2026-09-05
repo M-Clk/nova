@@ -75,7 +75,7 @@ public record PriceHistoryDto(
 
 // ─── CSV Price Import ─────────────────────────────────────────────────────────
 
-public record ImportPriceErrorRow(int RowNumber, string RawLine, string Reason);
+public record ImportPriceErrorRow(int RowNumber, string Reason);
 
 public record ImportPriceResult(
     int UpdatedCount,

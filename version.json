@@ -1,5 +1,5 @@
 {
-  "version": "1.4.1",
-  "releaseNotes": "Pos kasa ekranında indirim gösterimleri iyileştirildi.",
-  "releaseDate": "2026-08-14"
+  "version": "1.4.2",
+  "releaseNotes": "Urun listeleme ekranına Excel ile toplu fiyat güncellemesi özelliği eklendi.",
+  "releaseDate": "2026-09-05"
 }

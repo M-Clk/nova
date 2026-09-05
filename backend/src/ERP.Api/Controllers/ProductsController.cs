@@ -32,22 +32,14 @@ public class ProductsController(IProductService products, IPosService pos) : Con
 
     [HttpGet("export")]
     public async Task<IActionResult> Export(
-        [FromQuery] string format = "csv",
         [FromQuery] string? search = null,
         [FromQuery] Guid? brandId = null,
         [FromQuery] Guid? categoryId = null,
         [FromQuery] bool? isActive = null,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var result = await products.ExportProductsAsync(format, search, brandId, categoryId, isActive, cancellationToken);
-            return File(result.Content, result.ContentType, result.FileName);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+        var result = await products.ExportProductsAsync(search, brandId, categoryId, isActive, cancellationToken);
+        return File(result.Content, result.ContentType, result.FileName);
     }
 
     [HttpGet("{id:guid}")]
@@ -144,15 +136,15 @@ public class ProductsController(IProductService products, IPosService pos) : Con
             return BadRequest(new { error = "Dosya seçilmedi veya boş." });
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (ext != ".csv")
-            return BadRequest(new { error = "Yalnızca CSV dosyası yüklenebilir." });
+        if (ext != ".xlsx")
+            return BadRequest(new { error = "Yalnızca Excel (.xlsx) dosyası yüklenebilir." });
 
         var changedBy = User.FindFirstValue(ClaimTypes.Name) ?? "unknown";
 
         try
         {
             using var stream = file.OpenReadStream();
-            var result = await products.ImportPricesFromCsvAsync(stream, changedBy, cancellationToken);
+            var result = await products.ImportPricesFromExcelAsync(stream, changedBy, cancellationToken);
             return Ok(result);
         }
         catch (Exception ex)

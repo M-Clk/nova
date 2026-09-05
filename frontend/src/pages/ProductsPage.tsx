@@ -253,45 +253,6 @@ export function ProductsPage() {
     }
   }, [references.data, editingProductId]);
 
-  // ─── Export ──────────────────────────────────────────────────────────────────
-
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      const response = await apiClient.get("/products/export", {
-        params: {
-          search: search || undefined,
-          brandId: filterBrand || undefined,
-          categoryId: filterCategory || undefined,
-          isActive: filterStatus === "all" ? undefined : filterStatus === "active",
-          format: "csv"
-        },
-        responseType: "blob"
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement("a");
-      link.href = url;
-      const contentDisposition = response.headers["content-disposition"];
-      // RFC 6266: önce filename*= (RFC5987) varsa al, yoksa filename="..." al
-      const filenameStarMatch = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i);
-      const filenameMatch     = contentDisposition?.match(/filename="([^"]+)"/i);
-      const filename =
-        (filenameStarMatch ? decodeURIComponent(filenameStarMatch[1]) : null) ??
-        filenameMatch?.[1] ??
-        `urunler_${new Date().toISOString().split("T")[0]}.csv`;
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      setSnack({ open: true, message: "Ürünler başarıyla indirildi.", severity: "success" });
-    } catch {
-      setSnack({ open: true, message: "Ürünler indirilirken hata oluştu.", severity: "error" });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   // ─── Form CRUD Mutations ─────────────────────────────────────────────────────
 
   const resetForm = () => {
@@ -462,8 +423,8 @@ export function ProductsPage() {
   const handleFileDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
-    if (f && f.name.endsWith(".csv")) setImportFile(f);
-    else setSnack({ open: true, message: "Lütfen CSV dosyası seçin.", severity: "warning" });
+    if (f && f.name.endsWith(".xlsx")) setImportFile(f);
+    else setSnack({ open: true, message: "Lütfen Excel (.xlsx) dosyası seçin.", severity: "warning" });
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -476,7 +437,7 @@ export function ProductsPage() {
     importPrices.mutate(importFile);
   };
 
-  // Mevcut filtrelerle şablon CSV indir (aynı export endpoint'i)
+  // Mevcut filtrelerle şablon xlsx indir (aynı export endpoint'i)
   const downloadTemplate = async () => {
     setIsExporting(true);
     try {
@@ -486,14 +447,13 @@ export function ProductsPage() {
           brandId: filterBrand || undefined,
           categoryId: filterCategory || undefined,
           isActive: filterStatus === "all" ? undefined : filterStatus === "active",
-          format: "csv"
         },
         responseType: "blob"
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `fiyat_guncelleme_sablonu_${new Date().toISOString().split("T")[0]}.csv`);
+      link.setAttribute("download", `fiyat_guncelleme_sablonu_${new Date().toISOString().split("T")[0]}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -578,12 +538,6 @@ export function ProductsPage() {
             </Button>
           )}
 
-          <Button variant="outlined" size="small" startIcon={<FileDownloadOutlinedIcon />}
-            onClick={handleExport} disabled={isExporting}
-            sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600, px: 2.5, py: 1.1,
-                  transition: "all 0.2s ease", "&:hover": { transform: "translateY(-1px)" } }}>
-            {isExporting ? "İndiriliyor..." : "Tüm Ürünleri CSV Olarak İndir"}
-          </Button>
 
           {canManage && (
             <Button variant="contained" color={isFormOpen ? "secondary" : "primary"}
@@ -856,7 +810,7 @@ export function ProductsPage() {
         maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
         <DialogTitle sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
           <FileUploadOutlinedIcon color="primary" />
-          CSV ile Toplu Fiyat Güncelleme
+          Excel ile Toplu Fiyat Güncelleme
         </DialogTitle>
         <Divider />
 
@@ -871,9 +825,9 @@ export function ProductsPage() {
           {importStep === 0 && (
             <Stack spacing={2}>
               <Alert severity="info" sx={{ borderRadius: 2 }}>
-                Önce mevcut ürün verilerini CSV şablonu olarak indirin.<br />
-                Excel'de <strong>Alış Fiyatı</strong> ve <strong>Satış Fiyatı</strong> kolonlarını düzenleyip kaydedin.
-                Diğer kolonlara dokunmayın.
+                Önce mevcut ürün verilerini <strong>Excel şablonu</strong> olarak indirin.<br />
+                Excel'de <strong>Alış Fiyatı</strong> ve <strong>Satış Fiyatı</strong> sütunlarını düzenleyip kaydedin.
+                Diğer sütunlara dokunmayın.
               </Alert>
               <Typography variant="body2" color="text.secondary">
                 Şu anda uygulanmış filtreler (marka, kategori vb.) şablona yansır.
@@ -882,7 +836,7 @@ export function ProductsPage() {
               <Button variant="contained" startIcon={<FileDownloadOutlinedIcon />}
                 onClick={downloadTemplate} disabled={isExporting}
                 sx={{ alignSelf: "flex-start" }}>
-                {isExporting ? "İndiriliyor..." : "Şablonu İndir (.csv)"}
+                {isExporting ? "İndiriliyor..." : "Şablonu İndir (.xlsx)"}
               </Button>
             </Stack>
           )}
@@ -904,7 +858,7 @@ export function ProductsPage() {
                   transition: "all 0.2s",
                   "&:hover": { borderColor: "primary.main", bgcolor: "action.selected" }
                 }}>
-                <input ref={fileInputRef} type="file" accept=".csv" hidden onChange={handleFileChange} />
+                <input ref={fileInputRef} type="file" accept=".xlsx" hidden onChange={handleFileChange} />
                 {importFile ? (
                   <>
                     <CheckCircleOutlineIcon color="success" sx={{ fontSize: 40, mb: 1 }} />
@@ -916,8 +870,8 @@ export function ProductsPage() {
                 ) : (
                   <>
                     <FileUploadOutlinedIcon sx={{ fontSize: 40, mb: 1, color: "text.disabled" }} />
-                    <Typography fontWeight={600}>CSV dosyasını buraya sürükleyin</Typography>
-                    <Typography variant="caption" color="text.secondary">veya seçmek için tıklayın</Typography>
+                    <Typography fontWeight={600}>Excel dosyasını buraya sürükleyin</Typography>
+                    <Typography variant="caption" color="text.secondary">veya seçmek için tıklayın (.xlsx)</Typography>
                   </>
                 )}
               </Box>
