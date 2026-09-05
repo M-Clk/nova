@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Text.Json;
+using System.Linq;
 using ERP.Application.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -62,7 +63,7 @@ public class SystemController(
     public async Task<IActionResult> CheckForUpdates()
     {
         var currentVersionStr = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
-        var currentVersion = Version.TryParse(currentVersionStr, out var parsedCurrent) ? parsedCurrent : new Version(1, 0, 0);
+        var currentVersion = TryParseCleanVersion(currentVersionStr, out var parsedCurrent) ? parsedCurrent : new Version(1, 0, 0);
 
         // Fallback update URL if not configured in appsettings
         var updateUrl = configuration["UpdateCheckUrl"]
@@ -76,17 +77,83 @@ public class SystemController(
                 return Ok(new { updateAvailable = false, message = "Güncelleme bilgisi doğrulanamadı." });
             }
 
-            if (Version.TryParse(updateManifest.Version, out var remoteVersion) && remoteVersion > currentVersion)
+            if (TryParseCleanVersion(updateManifest.Version, out var remoteVersion) && remoteVersion > currentVersion)
             {
+                var pendingReleases = new List<VersionHistoryItem>();
+
+                if (updateManifest.History != null && updateManifest.History.Count > 0)
+                {
+                    foreach (var item in updateManifest.History)
+                    {
+                        if (TryParseCleanVersion(item.Version, out var itemVersion))
+                        {
+                            if (itemVersion > currentVersion && itemVersion <= remoteVersion)
+                            {
+                                pendingReleases.Add(item);
+                            }
+                        }
+                    }
+                }
+
+                // Ensure latest remote version is included in pendingReleases if omitted from History
+                if (!pendingReleases.Any(r => TryParseCleanVersion(r.Version, out var v) && v == remoteVersion))
+                {
+                    pendingReleases.Insert(0, new VersionHistoryItem
+                    {
+                        Version = updateManifest.Version,
+                        ReleaseNotes = updateManifest.ReleaseNotes,
+                        ReleaseDate = updateManifest.ReleaseDate
+                    });
+                }
+
+                // Sort descending: newest version first
+                pendingReleases = pendingReleases
+                    .OrderByDescending(r => TryParseCleanVersion(r.Version, out var v) ? v : new Version(0, 0, 0))
+                    .ToList();
+
+                // Format combined release notes string for backwards compatibility
+                var combinedNotes = pendingReleases.Count > 1
+                    ? string.Join("\n\n", pendingReleases.Select(r =>
+                        !string.IsNullOrWhiteSpace(r.ReleaseDate)
+                            ? $"v{r.Version} ({r.ReleaseDate}):\n{r.ReleaseNotes}"
+                            : $"v{r.Version}:\n{r.ReleaseNotes}"))
+                    : (pendingReleases.FirstOrDefault()?.ReleaseNotes ?? updateManifest.ReleaseNotes);
+
+                var message = pendingReleases.Count > 1
+                    ? $"Yeni sürüm ({updateManifest.Version}) mevcut. Henüz yüklenmemiş {pendingReleases.Count} sürüm bulundu."
+                    : $"Yeni sürüm mevcut ({updateManifest.Version}). Güncelleme önerilir.";
+
                 return Ok(new
                 {
                     updateAvailable = true,
                     currentVersion = currentVersionStr,
                     latestVersion = updateManifest.Version,
-                    releaseNotes = updateManifest.ReleaseNotes,
+                    releaseNotes = combinedNotes,
                     releaseDate = updateManifest.ReleaseDate,
-                    message = $"Yeni sürüm mevcut ({updateManifest.Version}). Güncelleme önerilir."
+                    pendingReleases,
+                    message
                 });
+            }
+
+            var fullHistory = new List<VersionHistoryItem>();
+            if (!string.IsNullOrWhiteSpace(updateManifest.Version))
+            {
+                fullHistory.Add(new VersionHistoryItem
+                {
+                    Version = updateManifest.Version,
+                    ReleaseNotes = updateManifest.ReleaseNotes,
+                    ReleaseDate = updateManifest.ReleaseDate
+                });
+            }
+            if (updateManifest.History != null)
+            {
+                foreach (var h in updateManifest.History)
+                {
+                    if (!fullHistory.Any(x => TryParseCleanVersion(x.Version, out var v1) && TryParseCleanVersion(h.Version, out var v2) && v1 == v2))
+                    {
+                        fullHistory.Add(h);
+                    }
+                }
             }
 
             return Ok(new
@@ -94,6 +161,9 @@ public class SystemController(
                 updateAvailable = false,
                 currentVersion = currentVersionStr,
                 latestVersion = updateManifest.Version,
+                releaseNotes = updateManifest.ReleaseNotes,
+                releaseDate = updateManifest.ReleaseDate,
+                history = fullHistory,
                 message = "Uygulamanız güncel."
             });
         }
@@ -107,6 +177,22 @@ public class SystemController(
                 message = "Güncelleme sunucusuna erişilemedi. İnternet bağlantınızı kontrol edin."
             });
         }
+    }
+
+    private static bool TryParseCleanVersion(string? raw, out Version version)
+    {
+        version = new Version(0, 0, 0);
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        var clean = raw.Trim().TrimStart('v', 'V');
+        var parts = clean.Split('.');
+        if (parts.Length == 1 && int.TryParse(parts[0], out var major))
+        {
+            clean = $"{major}.0";
+        }
+
+        return Version.TryParse(clean, out version!);
     }
 
     [HttpGet("update-status")]
@@ -525,6 +611,14 @@ public class SystemController(
 }
 
 public class UpdateManifest
+{
+    public string Version { get; set; } = string.Empty;
+    public string ReleaseNotes { get; set; } = string.Empty;
+    public string ReleaseDate { get; set; } = string.Empty;
+    public List<VersionHistoryItem>? History { get; set; }
+}
+
+public class VersionHistoryItem
 {
     public string Version { get; set; } = string.Empty;
     public string ReleaseNotes { get; set; } = string.Empty;

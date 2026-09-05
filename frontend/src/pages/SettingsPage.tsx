@@ -31,7 +31,10 @@ import {
   CircularProgress,
   Alert,
   FormControlLabel,
-  FormGroup
+  FormGroup,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from "@mui/material";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
@@ -56,6 +59,9 @@ import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
 import ReceiptOutlinedIcon from "@mui/icons-material/ReceiptOutlined";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import HistoryIcon from "@mui/icons-material/History";
+import NewReleasesOutlinedIcon from "@mui/icons-material/NewReleasesOutlined";
 
 import { useThemeMode } from "../theme/ThemeContext";
 import { useAuth } from "../auth/AuthContext";
@@ -1339,12 +1345,20 @@ interface SystemInfoResponse {
   serverTime: string;
 }
 
+interface VersionHistoryItem {
+  version: string;
+  releaseNotes: string;
+  releaseDate?: string;
+}
+
 interface UpdateCheckResponse {
   updateAvailable: boolean;
   currentVersion: string;
   latestVersion?: string;
   releaseNotes?: string;
   releaseDate?: string;
+  pendingReleases?: VersionHistoryItem[];
+  history?: VersionHistoryItem[];
   message: string;
 }
 
@@ -1515,21 +1529,88 @@ function SystemTabContent() {
                     </Typography>
                   </Alert>
 
-                  {updateInfo.releaseDate && (
+                  {updateInfo.releaseDate && !updateInfo.pendingReleases?.length && (
                     <Box>
                       <Typography variant="body2" color="text.secondary">Yayınlanma Tarihi</Typography>
                       <Typography variant="body2" fontWeight={600}>{updateInfo.releaseDate}</Typography>
                     </Box>
                   )}
 
-                  {updateInfo.releaseNotes && (
+                  {updateInfo.pendingReleases && updateInfo.pendingReleases.length > 0 ? (
+                    <Box sx={{ mt: 1 }}>
+                      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <NewReleasesOutlinedIcon color="warning" fontSize="small" />
+                          <Typography variant="body2" fontWeight={700}>
+                            {updateInfo.pendingReleases.length > 1
+                              ? `Yüklenecek Sürümler ve Değişiklik Notları (${updateInfo.pendingReleases.length} Sürüm)`
+                              : "Sürüm Değişiklik Notları:"}
+                          </Typography>
+                        </Stack>
+                        {updateInfo.pendingReleases.length > 1 && (
+                          <Chip
+                            size="small"
+                            label={`v${updateInfo.currentVersion} ➔ v${updateInfo.latestVersion}`}
+                            color="warning"
+                            variant="outlined"
+                            sx={{ fontWeight: 600, fontSize: "0.72rem", height: 22 }}
+                          />
+                        )}
+                      </Stack>
+
+                      <Stack spacing={1.5}>
+                        {updateInfo.pendingReleases.map((rel, idx) => (
+                          <Box
+                            key={rel.version}
+                            sx={{
+                              bgcolor: (theme) => theme.palette.mode === "dark" 
+                                ? (idx === 0 ? "rgba(251,191,36,0.08)" : "action.hover") 
+                                : (idx === 0 ? "rgba(251,191,36,0.06)" : "action.hover"),
+                              p: 2,
+                              borderRadius: 2,
+                              border: 1,
+                              borderColor: idx === 0 ? "warning.main" : "divider"
+                            }}
+                          >
+                            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.8 }}>
+                              <Stack direction="row" alignItems="center" spacing={1}>
+                                <Chip
+                                  label={`v${rel.version}`}
+                                  size="small"
+                                  color={idx === 0 ? "warning" : "default"}
+                                  sx={{ fontWeight: 700, height: 24 }}
+                                />
+                                {idx === 0 && (
+                                  <Chip
+                                    label="Hedef Son Sürüm"
+                                    size="small"
+                                    variant="outlined"
+                                    color="warning"
+                                    sx={{ height: 20, fontSize: "0.68rem", fontWeight: 600 }}
+                                  />
+                                )}
+                              </Stack>
+                              {rel.releaseDate && (
+                                <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                                  {rel.releaseDate}
+                                </Typography>
+                              )}
+                            </Stack>
+                            <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", fontFamily: "inherit", pl: 0.5 }}>
+                              {rel.releaseNotes}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    </Box>
+                  ) : updateInfo.releaseNotes ? (
                     <Box sx={{ bgcolor: "action.hover", p: 2, borderRadius: 2, border: 1, borderColor: "divider" }}>
                       <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>Sürüm Notları:</Typography>
                       <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
                         {updateInfo.releaseNotes}
                       </Typography>
                     </Box>
-                  )}
+                  ) : null}
 
                   {/* ── Apply Update Button ── */}
                   <Box
@@ -1572,9 +1653,80 @@ function SystemTabContent() {
                   </Box>
                 </>
               ) : (
-                <Alert severity="success" sx={{ borderRadius: 2 }}>
-                  Sisteminiz güncel.
-                </Alert>
+                <Stack spacing={2}>
+                  <Alert severity="success" sx={{ borderRadius: 2 }}>
+                    <strong>Sisteminiz Güncel!</strong>
+                    <Typography variant="body2" sx={{ mt: 0.5 }}>
+                      Mevcut sürüm ({systemInfo?.version || updateInfo.currentVersion}) en güncel versiyondur.
+                    </Typography>
+                  </Alert>
+
+                  {updateInfo.history && updateInfo.history.length > 0 && (
+                    <Accordion
+                      disableGutters
+                      sx={{
+                        borderRadius: 2,
+                        border: 1,
+                        borderColor: "divider",
+                        "&:before": { display: "none" },
+                        overflow: "hidden"
+                      }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <HistoryIcon fontSize="small" color="action" />
+                          <Typography variant="body2" fontWeight={600}>
+                            Geçmiş Sürüm Notları ({updateInfo.history.length} Sürüm)
+                          </Typography>
+                        </Stack>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ pt: 0, pb: 2 }}>
+                        <Stack spacing={1.5} sx={{ maxHeight: 360, overflowY: "auto", pr: 0.5 }}>
+                          {updateInfo.history.map((h, i) => (
+                            <Box
+                              key={h.version}
+                              sx={{
+                                p: 1.5,
+                                borderRadius: 1.5,
+                                bgcolor: "action.hover",
+                                border: 1,
+                                borderColor: "divider"
+                              }}
+                            >
+                              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                  <Chip
+                                    label={`v${h.version}`}
+                                    size="small"
+                                    color={i === 0 ? "primary" : "default"}
+                                    sx={{ fontWeight: 700, height: 22, fontSize: "0.72rem" }}
+                                  />
+                                  {i === 0 && (
+                                    <Chip
+                                      label="Mevcut Sürüm"
+                                      size="small"
+                                      variant="outlined"
+                                      color="primary"
+                                      sx={{ height: 18, fontSize: "0.65rem", fontWeight: 600 }}
+                                    />
+                                  )}
+                                </Stack>
+                                {h.releaseDate && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {h.releaseDate}
+                                  </Typography>
+                                )}
+                              </Stack>
+                              <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", pl: 0.5, fontSize: "0.82rem" }}>
+                                {h.releaseNotes}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </AccordionDetails>
+                    </Accordion>
+                  )}
+                </Stack>
               )}
             </Stack>
           ) : (

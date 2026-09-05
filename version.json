@@ -1,5 +1,127 @@
 {
-  "version": "1.4.3",
-  "releaseNotes": "Urun listeleme ekranına otomatik marka ve kategori atama özelliği eklendi.",
-  "releaseDate": "2026-09-05"
+  "version": "1.4.4",
+  "releaseNotes": "Sistem güncelleme ekranı iyileştirildi.",
+  "releaseDate": "2026-09-05",
+  "history": [
+    {
+      "version": "1.4.4",
+      "releaseNotes": "Urun listeleme ekranına otomatik marka ve kategori atama özelliği eklendi.",
+      "releaseDate": "2026-09-06"
+    },
+    {
+      "version": "1.4.2",
+      "releaseNotes": "Urun listeleme ekranına Excel ile toplu fiyat güncellemesi özelliği eklendi.",
+      "releaseDate": "2026-09-05"
+    },
+    {
+      "version": "1.4.1",
+      "releaseNotes": "Pos kasa ekranında indirim gösterimleri iyileştirildi.",
+      "releaseDate": "2026-08-14"
+    },
+    {
+      "version": "1.4.0",
+      "releaseNotes": "İndirim sistemi eklendi.",
+      "releaseDate": "2026-08-12"
+    },
+    {
+      "version": "1.3.0",
+      "releaseNotes": "Tam kapsamlı indirim modülü ve dinamik hesaplama servisleri eklendi.",
+      "releaseDate": "2026-08-01"
+    },
+    {
+      "version": "1.2.6",
+      "releaseNotes": "Sadece ürün fiyatlarını gösteren Kiosk ekranı eklendi.",
+      "releaseDate": "2026-07-12"
+    },
+    {
+      "version": "1.2.5",
+      "releaseNotes": "Makbuz yazdırma özelliği eklendi. POS Kasası ekranına indirim girme alanı eklendi. Stok ekranı arayüzü iyileştirildi.",
+      "releaseDate": "2026-07-12"
+    },
+    {
+      "version": "1.2.4",
+      "releaseNotes": "POS kasası ekranında barkod otomatik odaklanma hatası giderildi.",
+      "releaseDate": "2026-07-12"
+    },
+    {
+      "version": "1.2.3",
+      "releaseNotes": "POS kasası ekranında barkod okuyucu odaklanma iyileştirmeleri yapıldı.",
+      "releaseDate": "2026-07-12"
+    },
+    {
+      "version": "1.2.2",
+      "releaseNotes": "Ekranlar barkod okuyucu ile rahat kullanılabilir hale getirildi. Veritabanı hatası giderildi.",
+      "releaseDate": "2026-07-12"
+    },
+    {
+      "version": "1.2.1",
+      "releaseNotes": "Ekranlar barkod okuyucu ile rahat kullanılabilir hale getirildi.",
+      "releaseDate": "2026-07-11"
+    },
+    {
+      "version": "1.2.0",
+      "releaseNotes": "Arayüz üzerinden otomatik güncelleme altyapısı ve loglama eklendi.",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.13",
+      "releaseNotes": "Kendi kendini güncellerken oluşan API kapanma sorunu geçici konteyner yöntemiyle giderildi.",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.12",
+      "releaseNotes": "Güncelleme sırasındaki 504 Gateway Timeout hatasını önlemek için arka plan güncelleyici ve durum sorgulama (polling) yapısı eklendi.",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.11",
+      "releaseNotes": "Güncelleme sırasındaki 504 Gateway Timeout hatasını önlemek için arka plan güncelleyici ve polling mekanizması eklendi.",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.10",
+      "releaseNotes": "Arayüz üzerinden otomatik güncelleme test aşaması (1.1.10).",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.9",
+      "releaseNotes": "Docker Compose proje adı çakışması (-p nova parametresi ile) giderildi.",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.8",
+      "releaseNotes": "Arayüz üzerinden güncelleme test sürümü.",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.7",
+      "releaseNotes": "Linux container altında otomatik veritabanı yedekleme ve güncelleme akışı iyileştirildi.",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.6",
+      "releaseNotes": "Windows Docker Desktop TCP endpoint desteği eklendi.",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.5",
+      "releaseNotes": "Arka planda güncelleme mekanizması iyileştirildi.",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.4",
+      "releaseNotes": "Kullanıcı arayüzünde güncelleme yapılabilir hale getirildi.",
+      "releaseDate": "2026-07-08"
+    },
+    {
+      "version": "1.1.1",
+      "releaseNotes": "UI tarafında yükleme mekanizması eklendi. Mobil görünüm iyileştirmeleri yapıldı.",
+      "releaseDate": "2026-07-07"
+    },
+    {
+      "version": "1.1.0",
+      "releaseNotes": "Uzaktan güncelleme altyapısı ve Docker Hub entegrasyonu başarıyla kuruldu. Sistem kararlılık iyileştirmelerini içermektedir.",
+      "releaseDate": "2026-07-07"
+    }
+  ]
 }
