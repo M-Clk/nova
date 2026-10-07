@@ -53,7 +53,9 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import ReplayIcon from "@mui/icons-material/Replay";
+import PostAddOutlinedIcon from "@mui/icons-material/PostAddOutlined";
 import { DataTable } from "../components/DataTable";
+import { BulkProductImportDialog } from "../components/BulkProductImportDialog";
 import { apiClient } from "../api/apiClient";
 import { 
   ProductDto, 
@@ -124,6 +126,9 @@ export function ProductsPage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<ImportPriceResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Toplu Ürün Yükleme (Excel) dialog
+  const [bulkProductImportOpen, setBulkProductImportOpen] = useState(false);
 
   // Fiyat Geçmişi Drawer
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -535,6 +540,16 @@ export function ProductsPage() {
               sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600, px: 2.5, py: 1.1,
                     transition: "all 0.2s ease", "&:hover": { transform: "translateY(-1px)" } }}>
               Fiyat İçe Aktar
+            </Button>
+          )}
+
+          {/* Toplu Ürün Yükleme (Excel) */}
+          {canManage && (
+            <Button variant="outlined" color="primary" size="small" startIcon={<PostAddOutlinedIcon />}
+              onClick={() => setBulkProductImportOpen(true)}
+              sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700, px: 2.5, py: 1.1,
+                    transition: "all 0.2s ease", "&:hover": { transform: "translateY(-1px)" } }}>
+              Toplu Ürün Yükle
             </Button>
           )}
 
@@ -1119,6 +1134,17 @@ export function ProductsPage() {
           Fiyatlar güncellendi
         </Alert>
       </Snackbar>
+
+      {/* ── Toplu Ürün Yükleme (Excel) Dialog ── */}
+      <BulkProductImportDialog
+        open={bulkProductImportOpen}
+        onClose={() => setBulkProductImportOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["products"] });
+          queryClient.invalidateQueries({ queryKey: ["references"] });
+          setSnack({ open: true, message: "Toplu ürün yükleme başarıyla tamamlandı.", severity: "success" });
+        }}
+      />
 
     </Stack>
   );

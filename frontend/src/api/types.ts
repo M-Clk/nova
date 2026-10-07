@@ -427,3 +427,57 @@ export type ImportPriceResult = {
   batchId: string | null;
   errors: ImportPriceErrorRow[];
 };
+
+// ─── Bulk Product Import Types ────────────────────────────────────────────────
+
+export type ProductImportPreviewItem = {
+  rowNumber: number;
+  code: string;
+  barcode: string;
+  name: string;
+  categoryName: string;
+  suggestedCategoryName: string | null;
+  brandName: string;
+  suggestedBrandName: string | null;
+  unitCode: string;
+  purchasePrice: number;
+  salePrice: number;
+  minStock: number;
+  initialStock: number;
+  status: "New" | "Existing" | "Error";
+  errorMessage: string | null;
+};
+
+export type ProductImportPreviewResult = {
+  totalRows: number;
+  newCount: number;
+  existingCount: number;
+  errorCount: number;
+  rows: ProductImportPreviewItem[];
+};
+
+export type ProductImportRowItem = {
+  code: string;
+  barcode: string;
+  name: string;
+  categoryName?: string;
+  brandName?: string;
+  unitCode?: string;
+  purchasePrice: number;
+  salePrice: number;
+  minStock: number;
+  initialStock: number;
+};
+
+export type ProductImportCommitRequest = {
+  duplicateAction: "update" | "skip" | "fail";
+  items: ProductImportRowItem[];
+};
+
+export type ProductImportResult = {
+  insertedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  totalCount: number;
+  batchId: string | null;
+};

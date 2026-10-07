@@ -153,6 +153,77 @@ public class ProductsController(IProductService products, IPosService pos) : Con
         }
     }
 
+    // ─── Bulk Product Import (Toplu Ürün Yükleme) ───────────────────────────
+
+    /// <summary>
+    /// Toplu ürün yükleme için örnek Excel şablonunu (.xlsx) indirir.
+    /// </summary>
+    [HttpGet("import-template")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> DownloadImportTemplate(CancellationToken cancellationToken)
+    {
+        var bytes = await products.GenerateImportTemplateAsync(cancellationToken);
+        return File(
+            bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "urun_yukleme_sablonu.xlsx"
+        );
+    }
+
+    /// <summary>
+    /// Yüklenen Excel dosyasını parse eder, doğrular ve önizleme döner. DB'ye yazmaz.
+    /// </summary>
+    [HttpPost("import-preview")]
+    [Authorize(Roles = "Admin,Manager")]
+    [RequestSizeLimit(15 * 1024 * 1024)] // 15 MB
+    public async Task<IActionResult> PreviewProductImport(
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "Dosya seçilmedi veya boş." });
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (ext != ".xlsx")
+            return BadRequest(new { error = "Yalnızca Excel (.xlsx) dosyası yüklenebilir." });
+
+        try
+        {
+            using var stream = file.OpenReadStream();
+            var result = await products.PreviewProductImportAsync(stream, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Önizlemesi onaylanan ürünleri veritabanına kaydeder.
+    /// </summary>
+    [HttpPost("import-commit")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> CommitProductImport(
+        [FromBody] ProductImportCommitRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || request.Items is null || request.Items.Count == 0)
+            return BadRequest(new { error = "Kaydedilecek ürün listesi boş." });
+
+        var changedBy = User.FindFirstValue(ClaimTypes.Name) ?? "unknown";
+
+        try
+        {
+            var result = await products.CommitProductImportAsync(request, changedBy, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     // ─── Auto Categorization ─────────────────────────────────────────────────
 
     /// <summary>

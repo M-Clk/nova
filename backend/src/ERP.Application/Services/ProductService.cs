@@ -34,6 +34,11 @@ public interface IProductService
     Task<BrandSuggestionDto?> SuggestBrandAsync(string productName, CancellationToken cancellationToken = default);
     Task<BulkBrandSuggestionResult> PreviewBulkBrandAssignmentAsync(IReadOnlyList<Guid>? productIds, bool onlyUnbranded, CancellationToken cancellationToken = default);
     Task<BulkBrandUpdateResult> ApplyBulkBrandAssignmentAsync(IReadOnlyList<Guid>? productIds, bool onlyUnbranded, CancellationToken cancellationToken = default);
+
+    // ─── Bulk Product Import ──────────────────────────────────────────────────
+    Task<byte[]> GenerateImportTemplateAsync(CancellationToken cancellationToken = default);
+    Task<ProductImportPreviewResult> PreviewProductImportAsync(Stream xlsxStream, CancellationToken cancellationToken = default);
+    Task<ProductImportResult> CommitProductImportAsync(ProductImportCommitRequest request, string changedBy, CancellationToken cancellationToken = default);
 }
 
 public class ProductService(IErpDbContext db, IProductCategorizationDbService categorization, IProductBrandAssignmentDbService branding) : IProductService
@@ -651,5 +656,507 @@ public class ProductService(IErpDbContext db, IProductCategorizationDbService ca
         bool onlyUnbranded,
         CancellationToken cancellationToken = default)
         => branding.ApplyBulkAsync(productIds, onlyUnbranded, cancellationToken);
+
+    // ─── Bulk Product Import ──────────────────────────────────────────────────
+
+    public Task<byte[]> GenerateImportTemplateAsync(CancellationToken cancellationToken = default)
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Ürünler");
+
+        var headers = new[]
+        {
+            "Ürün Kodu *",
+            "Barkod",
+            "Ürün Adı *",
+            "Kategori",
+            "Marka",
+            "Birim",
+            "Alış Fiyatı",
+            "Satış Fiyatı",
+            "Kritik Stok",
+            "Başlangıç Stoğu"
+        };
+
+        for (int i = 0; i < headers.Length; i++)
+        {
+            var cell = ws.Cell(1, i + 1);
+            cell.Value = headers[i];
+            cell.Style.Font.Bold = true;
+            cell.Style.Font.FontColor = XLColor.White;
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1E293B"); // Koyu Lacivert
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        }
+
+        // Örnek Satır 1 (Kırtasiye)
+        ws.Cell(2, 1).Value = "8690001234567";
+        ws.Cell(2, 2).Value = "8690001234567";
+        ws.Cell(2, 3).Value = "Faber-Castell Grip 2011 0.7mm Kalem";
+        ws.Cell(2, 4).Value = "Kırtasiye";
+        ws.Cell(2, 5).Value = "Faber-Castell";
+        ws.Cell(2, 6).Value = "ADET";
+        ws.Cell(2, 7).Value = 45.00;
+        ws.Cell(2, 8).Value = 75.00;
+        ws.Cell(2, 9).Value = 5;
+        ws.Cell(2, 10).Value = 20;
+
+        // Örnek Satır 2 (Kitap)
+        ws.Cell(3, 1).Value = "9789750718533";
+        ws.Cell(3, 2).Value = "9789750718533";
+        ws.Cell(3, 3).Value = "Şeker Portakalı - Can Yayınları";
+        ws.Cell(3, 4).Value = "Kitap";
+        ws.Cell(3, 5).Value = "Can Yayınları";
+        ws.Cell(3, 6).Value = "ADET";
+        ws.Cell(3, 7).Value = 60.00;
+        ws.Cell(3, 8).Value = 90.00;
+        ws.Cell(3, 9).Value = 3;
+        ws.Cell(3, 10).Value = 15;
+
+        // Sayı formatları
+        ws.Range("G2:H100").Style.NumberFormat.Format = "#,##0.00";
+        ws.Range("I2:J100").Style.NumberFormat.Format = "#,##0";
+
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+        return Task.FromResult(ms.ToArray());
+    }
+
+    public async Task<ProductImportPreviewResult> PreviewProductImportAsync(
+        Stream xlsxStream,
+        CancellationToken cancellationToken = default)
+    {
+        XLWorkbook workbook;
+        try
+        {
+            workbook = new XLWorkbook(xlsxStream);
+        }
+        catch (Exception ex)
+        {
+            return new ProductImportPreviewResult(0, 0, 0, 1,
+            [
+                new ProductImportPreviewItem(0, "", "", "", "", null, "", null, "", 0, 0, 0, 0, "Error", $"Excel dosyası okunamadı: {ex.Message}")
+            ]);
+        }
+
+        using (workbook)
+        {
+            var ws = workbook.Worksheets.FirstOrDefault();
+            if (ws is null)
+            {
+                return new ProductImportPreviewResult(0, 0, 0, 1,
+                [
+                    new ProductImportPreviewItem(0, "", "", "", "", null, "", null, "", 0, 0, 0, 0, "Error", "Excel dosyasında sayfa bulunamadı.")
+                ]);
+            }
+
+            // Kolon indekslerini bul
+            var headerRow = ws.Row(1);
+            int lastHeaderCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+
+            int codeCol = 0;
+            int barcodeCol = 0;
+            int nameCol = 0;
+            int categoryCol = 0;
+            int brandCol = 0;
+            int unitCol = 0;
+            int purchasePriceCol = 0;
+            int salePriceCol = 0;
+            int minStockCol = 0;
+            int initialStockCol = 0;
+
+            for (int col = 1; col <= lastHeaderCol; col++)
+            {
+                var h = headerRow.Cell(col).GetString().Trim().ToLowerInvariant();
+                if (h.Contains("kod") && !h.Contains("bar")) codeCol = col;
+                else if (h.Contains("bar")) barcodeCol = col;
+                else if (h.Contains("ad")) nameCol = col;
+                else if (h.Contains("kategori")) categoryCol = col;
+                else if (h.Contains("marka")) brandCol = col;
+                else if (h.Contains("birim")) unitCol = col;
+                else if (h.Contains("al") && h.Contains("fiyat")) purchasePriceCol = col;
+                else if (h.Contains("sat") && h.Contains("fiyat")) salePriceCol = col;
+                else if (h.Contains("kritik") || h.Contains("min")) minStockCol = col;
+                else if (h.Contains("stok") || h.Contains("miktar") || h.Contains("devir")) initialStockCol = col;
+            }
+
+            if (codeCol == 0 || nameCol == 0)
+            {
+                return new ProductImportPreviewResult(0, 0, 0, 1,
+                [
+                    new ProductImportPreviewItem(1, "", "", "", "", null, "", null, "", 0, 0, 0, 0, "Error", "Gerekli kolonlar bulunamadı! 'Ürün Kodu' ve 'Ürün Adı' başlıkları zorunludur.")
+                ]);
+            }
+
+            // Sistemdeki mevcut ürünleri çek
+            var existingProducts = await db.Products
+                .AsNoTracking()
+                .Select(x => new { x.Id, x.Code, x.Barcode, x.Name })
+                .ToListAsync(cancellationToken);
+
+            var existingCodes = new HashSet<string>(
+                existingProducts.Select(x => x.Code.Trim()),
+                StringComparer.OrdinalIgnoreCase);
+
+            var existingBarcodes = new HashSet<string>(
+                existingProducts.Where(x => !string.IsNullOrWhiteSpace(x.Barcode)).Select(x => x.Barcode!.Trim()),
+                StringComparer.OrdinalIgnoreCase);
+
+            var seenCodesInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var items = new List<ProductImportPreviewItem>();
+            int lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
+
+            int newCount = 0;
+            int existingCount = 0;
+            int errorCount = 0;
+
+            for (int r = 2; r <= lastRow; r++)
+            {
+                var row = ws.Row(r);
+                if (row.IsEmpty()) continue;
+
+                var code = row.Cell(codeCol).GetString().Trim();
+                var name = row.Cell(nameCol).GetString().Trim();
+                var barcode = barcodeCol > 0 ? row.Cell(barcodeCol).GetString().Trim() : "";
+
+                // Kullanıcı barkod girmemişse, perakende akışına uygun olarak ürün kodunu barkod olarak varsayalım
+                if (string.IsNullOrWhiteSpace(barcode))
+                {
+                    barcode = code;
+                }
+
+                var category = categoryCol > 0 ? row.Cell(categoryCol).GetString().Trim() : "";
+                var brand = brandCol > 0 ? row.Cell(brandCol).GetString().Trim() : "";
+                var unit = unitCol > 0 ? row.Cell(unitCol).GetString().Trim() : "";
+                if (string.IsNullOrWhiteSpace(unit)) unit = "ADET";
+
+                decimal purchasePrice = purchasePriceCol > 0 ? ParseDecimalCell(row.Cell(purchasePriceCol)) : 0;
+                decimal salePrice = salePriceCol > 0 ? ParseDecimalCell(row.Cell(salePriceCol)) : 0;
+                decimal minStock = minStockCol > 0 ? ParseDecimalCell(row.Cell(minStockCol)) : 0;
+                decimal initialStock = initialStockCol > 0 ? ParseDecimalCell(row.Cell(initialStockCol)) : 0;
+
+                string status;
+                string? errorMessage = null;
+
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    status = "Error";
+                    errorMessage = "Ürün kodu zorunludur.";
+                    errorCount++;
+                }
+                else if (string.IsNullOrWhiteSpace(name))
+                {
+                    status = "Error";
+                    errorMessage = "Ürün adı zorunludur.";
+                    errorCount++;
+                }
+                else if (seenCodesInFile.Contains(code))
+                {
+                    status = "Error";
+                    errorMessage = $"Bu ürün kodu ('{code}') dosya içinde birden fazla kez geçiyor.";
+                    errorCount++;
+                }
+                else if (purchasePrice < 0 || salePrice < 0 || minStock < 0 || initialStock < 0)
+                {
+                    status = "Error";
+                    errorMessage = "Fiyat ve stok değerleri negatif olamaz.";
+                    errorCount++;
+                }
+                else
+                {
+                    seenCodesInFile.Add(code);
+
+                    bool isExisting = existingCodes.Contains(code) || (!string.IsNullOrWhiteSpace(barcode) && existingBarcodes.Contains(barcode));
+                    if (isExisting)
+                    {
+                        status = "Existing";
+                        errorMessage = "Bu ürün koduna/barkoduna sahip ürün sistemde zaten kayıtlı.";
+                        existingCount++;
+                    }
+                    else
+                    {
+                        status = "New";
+                        newCount++;
+                    }
+                }
+
+                // Akıllı kategori ve marka önerisi
+                string? suggestedCategory = null;
+                string? suggestedBrand = null;
+
+                if (string.IsNullOrWhiteSpace(category) && !string.IsNullOrWhiteSpace(name))
+                {
+                    var catSuggestion = await categorization.SuggestAsync(name, cancellationToken);
+                    if (catSuggestion != null) suggestedCategory = catSuggestion.SuggestedCategoryName;
+                }
+
+                if (string.IsNullOrWhiteSpace(brand) && !string.IsNullOrWhiteSpace(name))
+                {
+                    var brandSuggestion = await branding.SuggestAsync(name, cancellationToken);
+                    if (brandSuggestion != null) suggestedBrand = brandSuggestion.SuggestedBrandName;
+                }
+
+                items.Add(new ProductImportPreviewItem(
+                    RowNumber: r,
+                    Code: code,
+                    Barcode: barcode,
+                    Name: name,
+                    CategoryName: category,
+                    SuggestedCategoryName: suggestedCategory,
+                    BrandName: brand,
+                    SuggestedBrandName: suggestedBrand,
+                    UnitCode: unit,
+                    PurchasePrice: purchasePrice,
+                    SalePrice: salePrice,
+                    MinStock: minStock,
+                    InitialStock: initialStock,
+                    Status: status,
+                    ErrorMessage: errorMessage
+                ));
+            }
+
+            return new ProductImportPreviewResult(items.Count, newCount, existingCount, errorCount, items);
+        }
+    }
+
+    public async Task<ProductImportResult> CommitProductImportAsync(
+        ProductImportCommitRequest request,
+        string changedBy,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.Items == null || request.Items.Count == 0)
+        {
+            return new ProductImportResult(0, 0, 0, 0, null);
+        }
+
+        await using var tx = await db.BeginTransactionAsync(cancellationToken);
+
+        // Mevcut ürünleri çek ve sözlüklere güvenli şekilde aktar (DB'de çift barkod/kod olsa bile patlamaz)
+        var existingProducts = await db.Products.ToListAsync(cancellationToken);
+        var productByCode = new Dictionary<string, Product>(StringComparer.OrdinalIgnoreCase);
+        var productByBarcode = new Dictionary<string, Product>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var p in existingProducts)
+        {
+            var c = p.Code?.Trim();
+            if (!string.IsNullOrEmpty(c))
+            {
+                productByCode[c] = p;
+            }
+
+            var b = p.Barcode?.Trim();
+            if (!string.IsNullOrEmpty(b))
+            {
+                productByBarcode[b] = p;
+            }
+        }
+
+        // Çakışma davranışı 'fail' ise ve sistemde olan ürün varsa hata fırlat
+        if (request.DuplicateAction.Equals("fail", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var item in request.Items)
+            {
+                var barcodeToCheck = !string.IsNullOrWhiteSpace(item.Barcode) ? item.Barcode.Trim() : item.Code.Trim();
+                if (productByCode.ContainsKey(item.Code.Trim()) || productByBarcode.ContainsKey(barcodeToCheck))
+                {
+                    throw new InvalidOperationException($"'{item.Code}' kodlu ürün sistemde zaten mevcut. İşlem iptal edildi.");
+                }
+            }
+        }
+
+        // Referans verileri hafızaya al (güvenli sözlük)
+        var categories = await db.Categories.ToListAsync(cancellationToken);
+        var categoryMap = new Dictionary<string, Category>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in categories)
+        {
+            if (!string.IsNullOrWhiteSpace(c.Name))
+                categoryMap[c.Name.Trim()] = c;
+        }
+
+        var brands = await db.Brands.ToListAsync(cancellationToken);
+        var brandMap = new Dictionary<string, Brand>(StringComparer.OrdinalIgnoreCase);
+        foreach (var b in brands)
+        {
+            if (!string.IsNullOrWhiteSpace(b.Name))
+                brandMap[b.Name.Trim()] = b;
+        }
+
+        var units = await db.Units.ToListAsync(cancellationToken);
+        var unitMap = new Dictionary<string, Unit>(StringComparer.OrdinalIgnoreCase);
+        foreach (var u in units)
+        {
+            if (!string.IsNullOrWhiteSpace(u.Code))
+                unitMap[u.Code.Trim()] = u;
+            if (!string.IsNullOrWhiteSpace(u.Name))
+                unitMap[u.Name.Trim()] = u;
+        }
+
+        // Varsayılan Kategori, Marka ve Birim güvencesi
+        Category defaultCategory;
+        if (!categoryMap.TryGetValue("Genel", out defaultCategory!))
+        {
+            defaultCategory = new Category { Id = Guid.NewGuid(), Name = "Genel" };
+            db.Categories.Add(defaultCategory);
+            categoryMap["Genel"] = defaultCategory;
+        }
+
+        Brand defaultBrand;
+        if (!brandMap.TryGetValue("Genel", out defaultBrand!))
+        {
+            defaultBrand = new Brand { Id = Guid.NewGuid(), Name = "Genel" };
+            db.Brands.Add(defaultBrand);
+            brandMap["Genel"] = defaultBrand;
+        }
+
+        Unit defaultUnit;
+        if (!unitMap.TryGetValue("ADET", out defaultUnit!))
+        {
+            defaultUnit = new Unit { Id = Guid.NewGuid(), Code = "ADET", Name = "Adet" };
+            db.Units.Add(defaultUnit);
+            unitMap["ADET"] = defaultUnit;
+        }
+
+        var defaultWarehouse = await db.Warehouses.FirstOrDefaultAsync(cancellationToken);
+        var batchId = Guid.NewGuid();
+
+        int insertedCount = 0;
+        int updatedCount = 0;
+        int skippedCount = 0;
+
+        foreach (var item in request.Items)
+        {
+            var code = item.Code.Trim();
+            var barcode = !string.IsNullOrWhiteSpace(item.Barcode) ? item.Barcode.Trim() : code;
+
+            Product? existing = null;
+            if (productByCode.TryGetValue(code, out var p1)) existing = p1;
+            else if (productByBarcode.TryGetValue(barcode, out var p2)) existing = p2;
+
+            if (existing != null)
+            {
+                if (request.DuplicateAction.Equals("skip", StringComparison.OrdinalIgnoreCase))
+                {
+                    skippedCount++;
+                    continue;
+                }
+
+                // Update / Override
+                existing.Name = item.Name.Trim();
+                if (!string.IsNullOrWhiteSpace(barcode)) existing.Barcode = barcode;
+                existing.MinStock = item.MinStock;
+
+                // Fiyat geçmişi kaydet
+                if (existing.PurchasePrice != item.PurchasePrice || existing.SalePrice != item.SalePrice)
+                {
+                    db.PriceHistories.Add(new PriceHistory
+                    {
+                        Id = Guid.NewGuid(),
+                        ProductId = existing.Id,
+                        OldPurchasePrice = existing.PurchasePrice,
+                        OldSalePrice = existing.SalePrice,
+                        NewPurchasePrice = item.PurchasePrice,
+                        NewSalePrice = item.SalePrice,
+                        ChangedBy = $"{changedBy} (Toplu İçe Aktarma)",
+                        BatchId = batchId,
+                        IsReverted = false,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                existing.PurchasePrice = item.PurchasePrice;
+                existing.SalePrice = item.SalePrice;
+
+                updatedCount++;
+            }
+            else
+            {
+                // Kategori Çözümleme
+                var catName = !string.IsNullOrWhiteSpace(item.CategoryName) ? item.CategoryName.Trim() : "Genel";
+                if (!categoryMap.TryGetValue(catName, out var category))
+                {
+                    category = new Category { Id = Guid.NewGuid(), Name = catName };
+                    db.Categories.Add(category);
+                    categoryMap[catName] = category;
+                }
+
+                // Marka Çözümleme
+                var brName = !string.IsNullOrWhiteSpace(item.BrandName) ? item.BrandName.Trim() : "Genel";
+                if (!brandMap.TryGetValue(brName, out var brand))
+                {
+                    brand = new Brand { Id = Guid.NewGuid(), Name = brName };
+                    db.Brands.Add(brand);
+                    brandMap[brName] = brand;
+                }
+
+                // Birim Çözümleme
+                var unCode = !string.IsNullOrWhiteSpace(item.UnitCode) ? item.UnitCode.Trim() : "ADET";
+                if (!unitMap.TryGetValue(unCode, out var unit))
+                {
+                    unit = new Unit { Id = Guid.NewGuid(), Code = unCode.ToUpperInvariant(), Name = unCode };
+                    db.Units.Add(unit);
+                    unitMap[unCode] = unit;
+                }
+
+                var newProduct = new Product
+                {
+                    Id = Guid.NewGuid(),
+                    Code = code,
+                    Barcode = barcode,
+                    Name = item.Name.Trim(),
+                    BrandId = brand.Id,
+                    CategoryId = category.Id,
+                    UnitId = unit.Id,
+                    PurchasePrice = item.PurchasePrice,
+                    SalePrice = item.SalePrice,
+                    MinStock = item.MinStock,
+                    IsActive = true
+                };
+
+                db.Products.Add(newProduct);
+                productByCode[code] = newProduct;
+                productByBarcode[barcode] = newProduct;
+
+                // Başlangıç stoğu hareketi ekle
+                if (item.InitialStock > 0 && defaultWarehouse != null)
+                {
+                    db.StockMovements.Add(new StockMovement
+                    {
+                        Id = Guid.NewGuid(),
+                        ProductId = newProduct.Id,
+                        WarehouseId = defaultWarehouse.Id,
+                        Type = StockMovementType.StockCount,
+                        Quantity = item.InitialStock,
+                        UnitPrice = item.PurchasePrice,
+                        ReferenceType = "Toplu Ürün Yükleme (Açılış)",
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                insertedCount++;
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+
+        return new ProductImportResult(insertedCount, updatedCount, skippedCount, request.Items.Count, batchId);
+    }
+
+    private static decimal ParseDecimalCell(IXLCell cell)
+    {
+        if (cell.IsEmpty()) return 0;
+        if (cell.TryGetValue(out double dVal)) return (decimal)dVal;
+
+        var raw = cell.GetString().Trim().Replace(",", ".");
+        if (decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
+                             System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed;
+        }
+
+        return 0;
+    }
 }
+
 

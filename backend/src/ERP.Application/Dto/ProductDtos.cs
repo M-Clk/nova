@@ -164,3 +164,51 @@ public record BulkBrandAssignmentRequest(
     IReadOnlyList<Guid>? ProductIds,
     bool OnlyUnbranded = true);
 
+// ─── Bulk Product Import ──────────────────────────────────────────────────────
+
+public record ProductImportPreviewItem(
+    int RowNumber,
+    string Code,
+    string Barcode,
+    string Name,
+    string CategoryName,
+    string? SuggestedCategoryName,
+    string BrandName,
+    string? SuggestedBrandName,
+    string UnitCode,
+    decimal PurchasePrice,
+    decimal SalePrice,
+    decimal MinStock,
+    decimal InitialStock,
+    string Status, // "New", "Existing", "Error"
+    string? ErrorMessage);
+
+public record ProductImportPreviewResult(
+    int TotalRows,
+    int NewCount,
+    int ExistingCount,
+    int ErrorCount,
+    IReadOnlyList<ProductImportPreviewItem> Rows);
+
+public record ProductImportRowItem(
+    string Code,
+    string Barcode,
+    string Name,
+    string? CategoryName,
+    string? BrandName,
+    string? UnitCode,
+    decimal PurchasePrice,
+    decimal SalePrice,
+    decimal MinStock,
+    decimal InitialStock);
+
+public record ProductImportCommitRequest(
+    string DuplicateAction, // "update", "skip", "fail"
+    IReadOnlyList<ProductImportRowItem> Items);
+
+public record ProductImportResult(
+    int InsertedCount,
+    int UpdatedCount,
+    int SkippedCount,
+    int TotalCount,
+    Guid? BatchId);
