@@ -1,8 +1,13 @@
 {
-  "version": "1.5.0",
-  "releaseNotes": "Toplu ürün ekleme/güncelleme ekranı güncellendi.",
+  "version": "1.5.1",
+  "releaseNotes": "Güncelleme mekanizması iyileştirildi.",
   "releaseDate": "2026-10-08",
   "history": [
+    {
+      "version": "1.5.1",
+      "releaseNotes": "Güncelleme mekanizması iyileştirildi.",
+      "releaseDate": "2026-10-08"
+    },
     {
       "version": "1.5.0",
       "releaseNotes": "Toplu ürün ekleme/güncelleme ekranı güncellendi.",
