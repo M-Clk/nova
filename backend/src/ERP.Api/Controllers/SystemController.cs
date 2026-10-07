@@ -59,15 +59,16 @@ public class SystemController(
     }
 
     [HttpGet("check-update")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     public async Task<IActionResult> CheckForUpdates()
     {
         var currentVersionStr = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
         var currentVersion = TryParseCleanVersion(currentVersionStr, out var parsedCurrent) ? parsedCurrent : new Version(1, 0, 0);
 
         // Fallback update URL if not configured in appsettings
-        var updateUrl = configuration["UpdateCheckUrl"]
+        var baseUrl = configuration["UpdateCheckUrl"]
                         ?? "https://raw.githubusercontent.com/M-Clk/nova/master/version.json";
+        var updateUrl = $"{baseUrl}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
 
         try
         {

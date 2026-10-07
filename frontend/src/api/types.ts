@@ -481,3 +481,30 @@ export type ProductImportResult = {
   totalCount: number;
   batchId: string | null;
 };
+
+// ─── System / Update Types ────────────────────────────────────────────────────
+
+export interface SystemInfoResponse {
+  version: string;
+  os: string;
+  runtime: string;
+  databaseConnected: boolean;
+  serverTime: string;
+}
+
+export interface VersionHistoryItem {
+  version: string;
+  releaseNotes: string;
+  releaseDate?: string;
+}
+
+export interface UpdateCheckResponse {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  releaseNotes?: string;
+  releaseDate?: string;
+  pendingReleases?: VersionHistoryItem[];
+  history?: VersionHistoryItem[];
+  message: string;
+}

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -1978,6 +1979,8 @@ function CompanyInfoTab() {
 export function SettingsPage() {
   const { user } = useAuth();
   const theme = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState(0);
 
   const tabsConfig = useMemo(() => {
@@ -2046,6 +2049,16 @@ export function SettingsPage() {
 
     return list;
   }, [user]);
+
+  // Deep-link ile belirli bir sekmeye (?tab=system vs.) yönlendirme
+  useEffect(() => {
+    if (tabParam === "system" || tabParam === "update" || tabParam === "guncelleme") {
+      const idx = tabsConfig.findIndex((t: any) => t.label === "Sistem Güncelleme");
+      if (idx !== -1) {
+        setActiveTab(idx);
+      }
+    }
+  }, [tabParam, tabsConfig]);
 
   const isDark = theme.palette.mode === "dark";
 

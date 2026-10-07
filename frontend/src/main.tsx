@@ -67,6 +67,7 @@ import { CartProvider } from "./context/CartContext";
 import { PrivateRoute } from "./auth/PrivateRoute";
 import { LicenseProvider } from "./context/LicenseContext";
 import { LicenseOverlay } from "./components/LicenseOverlay";
+import { UpdateNotificationModal } from "./components/UpdateNotificationModal";
 
 const queryClient = new QueryClient();
 const SIDEBAR_WIDTH = 260;
@@ -378,6 +379,7 @@ function App() {
           <LicenseProvider>
             <CartProvider>
               <LicenseOverlay />
+              <UpdateNotificationModal />
               <Routes>
                 {/* Public route — herkese açık */}
                 <Route path="/login" element={<LoginPage />} />
