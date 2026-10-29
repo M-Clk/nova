@@ -164,7 +164,46 @@ public record BulkBrandAssignmentRequest(
     IReadOnlyList<Guid>? ProductIds,
     bool OnlyUnbranded = true);
 
+// ─── Product Import Settings ──────────────────────────────────────────────────
+
+public record ProductImportSettingsDto(
+    Guid? DefaultCategoryId,
+    string? DefaultCategoryName,
+    Guid? DefaultBrandId,
+    string? DefaultBrandName,
+    Guid? DefaultUnitId,
+    string? DefaultUnitName,
+    decimal DefaultMinStock,
+    decimal DefaultInitialStock,
+    bool AutoCategoryEnabled,
+    bool AutoBrandEnabled,
+    bool SanitizeBarcode,
+    string PriceMappingMode); // "SalePriceOnly", "PurchasePriceOnly", "Both"
+
+public record UpdateProductImportSettingsRequest(
+    Guid? DefaultCategoryId,
+    Guid? DefaultBrandId,
+    Guid? DefaultUnitId,
+    decimal DefaultMinStock,
+    decimal DefaultInitialStock,
+    bool AutoCategoryEnabled,
+    bool AutoBrandEnabled,
+    bool SanitizeBarcode,
+    string? PriceMappingMode);
+
 // ─── Bulk Product Import ──────────────────────────────────────────────────────
+
+public record ImportColumnInfoDto(
+    int Index,
+    string Letter,
+    string HeaderName,
+    string? SampleValue = null);
+
+public record ProductImportDetectedColumnsDto(
+    int? BarcodeCol,
+    int? NameCol,
+    int? SalePriceCol,
+    int? PurchasePriceCol);
 
 public record ProductImportPreviewItem(
     int RowNumber,
@@ -178,17 +217,37 @@ public record ProductImportPreviewItem(
     string UnitCode,
     decimal PurchasePrice,
     decimal SalePrice,
+    decimal? OldPurchasePrice,
+    decimal? OldSalePrice,
     decimal MinStock,
     decimal InitialStock,
-    string Status, // "New", "Existing", "Error"
-    string? ErrorMessage);
+    string Status, // "New", "Existing", "Unchanged", "Error"
+    string? ErrorMessage,
+    string? SheetName = null);
+
+public record RawExcelRowDto(int RowNumber, IReadOnlyList<string> Cells);
 
 public record ProductImportPreviewResult(
     int TotalRows,
     int NewCount,
-    int ExistingCount,
+    int ExistingCount, // Fiyatı veya bilgisi değişecek olanlar
+    int UnchangedCount, // Fiyatı aynı olanlar
     int ErrorCount,
-    IReadOnlyList<ProductImportPreviewItem> Rows);
+    ProductImportDetectedColumnsDto? DetectedColumns,
+    IReadOnlyList<string> AvailableSheets,
+    IReadOnlyList<ImportColumnInfoDto> AvailableColumns,
+    IReadOnlyList<ProductImportPreviewItem> Rows,
+    string? SelectedSheet = null,
+    IReadOnlyList<RawExcelRowDto>? RawRows = null);
+
+
+public record ProductImportPreviewOptions(
+    int? BarcodeCol = null,
+    int? NameCol = null,
+    int? SalePriceCol = null,
+    int? PurchasePriceCol = null,
+    string? SheetName = null, // null/empty = Tüm sayfalar
+    bool? SanitizeBarcode = null);
 
 public record ProductImportRowItem(
     string Code,
@@ -204,7 +263,8 @@ public record ProductImportRowItem(
 
 public record ProductImportCommitRequest(
     string DuplicateAction, // "update", "skip", "fail"
-    IReadOnlyList<ProductImportRowItem> Items);
+    IReadOnlyList<ProductImportRowItem> Items,
+    bool ApplyBrandCategoryToExisting = false); // true ise mevcut ürünlerin marka/kategorisi de güncellenir
 
 public record ProductImportResult(
     int InsertedCount,

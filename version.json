@@ -1,8 +1,13 @@
 {
-  "version": "1.5.1",
-  "releaseNotes": "Güncelleme mekanizması iyileştirildi.",
-  "releaseDate": "2026-10-08",
+  "version": "1.6.0",
+  "releaseNotes": "Akıllı ürün ve fiyat içe aktarma ekranı sekmeli yapıya geçirildi; toplu marka/kategori seçimi, birleşik hücre (set) fiyat desteği ve dahili Excel tablosu inceleme özelliği eklendi.",
+  "releaseDate": "2026-10-29",
   "history": [
+    {
+      "version": "1.6.0",
+      "releaseNotes": "Akıllı ürün ve fiyat içe aktarma ekranı sekmeli yapıya geçirildi; toplu marka/kategori seçimi, birleşik hücre (set) fiyat desteği ve dahili Excel tablosu inceleme özelliği eklendi.",
+      "releaseDate": "2026-10-29"
+    },
     {
       "version": "1.5.1",
       "releaseNotes": "Güncelleme mekanizması iyileştirildi.",

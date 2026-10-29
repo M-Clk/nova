@@ -63,6 +63,8 @@ import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import HistoryIcon from "@mui/icons-material/History";
 import NewReleasesOutlinedIcon from "@mui/icons-material/NewReleasesOutlined";
+import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
+import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 
 import { useThemeMode } from "../theme/ThemeContext";
 import { useAuth } from "../auth/AuthContext";
@@ -80,7 +82,9 @@ import {
   ReferenceDataDto,
   LookupDto,
   CreateLookupRequest,
-  UpdateLookupRequest
+  UpdateLookupRequest,
+  ProductImportSettingsDto,
+  UpdateProductImportSettingsRequest
 } from "../api/types";
 
 // ─── Role badge ────────────────────────────────────────────────────────────────
@@ -1209,6 +1213,270 @@ function UnitsTab() {
   );
 }
 
+// ─── Ürün İçe Aktarma Varsayılanları Tab ──────────────────────────────────────
+
+function ProductImportSettingsTab() {
+  const qc = useQueryClient();
+  const theme = useTheme();
+  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const { data: references, isLoading: isRefLoading } = useQuery<ReferenceDataDto>({
+    queryKey: ["reference-data"],
+    queryFn: async () => (await apiClient.get<ReferenceDataDto>("/reference-data")).data
+  });
+
+  const { data: settings, isLoading: isSettingsLoading } = useQuery<ProductImportSettingsDto>({
+    queryKey: ["product-import-settings"],
+    queryFn: async () => (await apiClient.get<ProductImportSettingsDto>("/products/import-settings")).data
+  });
+
+  const [formState, setFormState] = useState<UpdateProductImportSettingsRequest>({
+    defaultCategoryId: null,
+    defaultBrandId: null,
+    defaultUnitId: null,
+    defaultMinStock: 0,
+    defaultInitialStock: 0,
+    autoCategoryEnabled: true,
+    autoBrandEnabled: true,
+    sanitizeBarcode: true
+  });
+
+  useEffect(() => {
+    if (settings) {
+      setFormState({
+        defaultCategoryId: settings.defaultCategoryId,
+        defaultBrandId: settings.defaultBrandId,
+        defaultUnitId: settings.defaultUnitId,
+        defaultMinStock: settings.defaultMinStock,
+        defaultInitialStock: settings.defaultInitialStock,
+        autoCategoryEnabled: settings.autoCategoryEnabled,
+        autoBrandEnabled: settings.autoBrandEnabled,
+        sanitizeBarcode: settings.sanitizeBarcode
+      });
+    }
+  }, [settings]);
+
+  const updateMutation = useMutation({
+    mutationFn: (req: UpdateProductImportSettingsRequest) =>
+      apiClient.put<ProductImportSettingsDto>("/products/import-settings", req),
+    onSuccess: (data) => {
+      qc.setQueryData(["product-import-settings"], data.data);
+      setSuccessMsg("Ürün aktarım varsayılanları başarıyla kaydedildi.");
+      setErrorMsg("");
+      setTimeout(() => setSuccessMsg(""), 4000);
+    },
+    onError: (err: any) => {
+      setErrorMsg(err.response?.data?.error ?? "Ayarlar kaydedilirken bir hata oluştu.");
+      setSuccessMsg("");
+    }
+  });
+
+  const handleSave = () => {
+    updateMutation.mutate(formState);
+  };
+
+  const categories = references?.categories ?? [];
+  const brands = references?.brands ?? [];
+  const units = references?.units ?? [];
+
+  if (isRefLoading || isSettingsLoading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+        <CircularProgress size={36} />
+      </Box>
+    );
+  }
+
+  return (
+    <Stack spacing={3}>
+      <Alert severity="info" icon={<AutoAwesomeOutlinedIcon />} sx={{ borderRadius: 2 }}>
+        Excel ve tedarikçi listelerinden ürün aktarırken eksik kalan alanlar için kullanılacak varsayılan değerleri
+        ve akıllı eşleştirme kurallarını buradan yapılandırabilirsiniz.
+      </Alert>
+
+      {successMsg && (
+        <Alert severity="success" sx={{ borderRadius: 2 }} onClose={() => setSuccessMsg("")}>
+          {successMsg}
+        </Alert>
+      )}
+
+      {errorMsg && (
+        <Alert severity="error" sx={{ borderRadius: 2 }} onClose={() => setErrorMsg("")}>
+          {errorMsg}
+        </Alert>
+      )}
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3 }}>
+        {/* Sol Kolon: Varsayılan Değerler */}
+        <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5 }}>
+          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <Inventory2OutlinedIcon fontSize="small" color="primary" /> Varsayılan Tanımlar
+          </Typography>
+
+          <Stack spacing={2.5}>
+            <TextField
+              select
+              label="Varsayılan Kategori"
+              value={formState.defaultCategoryId ?? ""}
+              onChange={(e) => setFormState({ ...formState, defaultCategoryId: e.target.value || null })}
+              fullWidth
+              size="small"
+              helperText="Kategori kuralı eşleşmediğinde veya belirtilmediğinde atanır."
+            >
+              <MenuItem value="">
+                <em>Kategori Yok / Tanımsız</em>
+              </MenuItem>
+              {categories.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
+              label="Varsayılan Marka"
+              value={formState.defaultBrandId ?? ""}
+              onChange={(e) => setFormState({ ...formState, defaultBrandId: e.target.value || null })}
+              fullWidth
+              size="small"
+              helperText="Marka kuralı eşleşmediğinde veya belirtilmediğinde atanır."
+            >
+              <MenuItem value="">
+                <em>Marka Yok / Tanımsız</em>
+              </MenuItem>
+              {brands.map((b) => (
+                <MenuItem key={b.id} value={b.id}>
+                  {b.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
+              label="Varsayılan Ölçü Birimi"
+              value={formState.defaultUnitId ?? ""}
+              onChange={(e) => setFormState({ ...formState, defaultUnitId: e.target.value || null })}
+              fullWidth
+              size="small"
+              helperText="Excel'de birim yoksa atanacak ölçü birimi (Örn: ADET)."
+            >
+              <MenuItem value="">
+                <em>Birim Seçiniz</em>
+              </MenuItem>
+              {units.map((u) => (
+                <MenuItem key={u.id} value={u.id}>
+                  {u.name} ({u.code})
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <TextField
+                label="Varsayılan Min. Stok"
+                type="number"
+                value={formState.defaultMinStock ?? 0}
+                onChange={(e) => setFormState({ ...formState, defaultMinStock: Number(e.target.value) })}
+                fullWidth
+                size="small"
+                inputProps={{ min: 0 }}
+                helperText="Kritik stok uyarısı için"
+              />
+              <TextField
+                label="Başlangıç Stok Miktarı"
+                type="number"
+                value={formState.defaultInitialStock ?? 0}
+                onChange={(e) => setFormState({ ...formState, defaultInitialStock: Number(e.target.value) })}
+                fullWidth
+                size="small"
+                inputProps={{ min: 0 }}
+                helperText="Yeni ürün için ilk stok"
+              />
+            </Box>
+          </Stack>
+        </Paper>
+
+        {/* Sağ Kolon: Akıllı Kurallar ve Barkod Standardizasyonu */}
+        <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5 }}>
+          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <AutoAwesomeOutlinedIcon fontSize="small" color="primary" /> Akıllı Kurallar & Biçimlendirme
+          </Typography>
+
+          <Stack spacing={2}>
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formState.autoCategoryEnabled ?? true}
+                    onChange={(e) => setFormState({ ...formState, autoCategoryEnabled: e.target.checked })}
+                    color="primary"
+                  />
+                }
+                label={<Typography variant="subtitle2" fontWeight={700}>Otomatik Kategori Tespiti</Typography>}
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mt: 0.5 }}>
+                Excel dosyasındaki ürün adından sistemdeki kategori eşleştirme kurallarını tarayarak kategoriyi otomatik belirler.
+              </Typography>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formState.autoBrandEnabled ?? true}
+                    onChange={(e) => setFormState({ ...formState, autoBrandEnabled: e.target.checked })}
+                    color="primary"
+                  />
+                }
+                label={<Typography variant="subtitle2" fontWeight={700}>Otomatik Marka Tespiti</Typography>}
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mt: 0.5 }}>
+                Excel dosyasındaki ürün adından sistemdeki marka eşleştirme kurallarını tarayarak markayı otomatik belirler.
+              </Typography>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formState.sanitizeBarcode ?? true}
+                    onChange={(e) => setFormState({ ...formState, sanitizeBarcode: e.target.checked })}
+                    color="primary"
+                  />
+                }
+                label={<Typography variant="subtitle2" fontWeight={700}>Barkodları Standartlaştır (Temizle)</Typography>}
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mt: 0.5 }}>
+                Barkoddaki tire (-), nokta (.) ve boşlukları kaldırır. Örneğin: <code>978-625-98199-1-4</code> yerine <code>9786259819914</code> olarak kaydeder. Barkod okuyucularla tam uyumluluk sağlar.
+              </Typography>
+            </Paper>
+          </Stack>
+        </Paper>
+      </Box>
+
+      <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
+        <Button
+          variant="contained"
+          startIcon={updateMutation.isPending ? <CircularProgress size={18} color="inherit" /> : <SaveOutlinedIcon />}
+          onClick={handleSave}
+          disabled={updateMutation.isPending}
+          sx={{
+            borderRadius: 2,
+            px: 4,
+            py: 1.2,
+            fontWeight: 700,
+            textTransform: "none",
+            boxShadow: `0 4px 14px ${theme.palette.primary.main}40`
+          }}
+        >
+          {updateMutation.isPending ? "Kaydediliyor..." : "Ayarları Kaydet"}
+        </Button>
+      </Box>
+    </Stack>
+  );
+}
+
 // ─── Lisans Tab Content ──────────────────────────────────────────────────────────
 
 function LicenseTabContent() {
@@ -2043,6 +2311,11 @@ export function SettingsPage() {
           label: "Ölçü Birimleri",
           icon: <Inventory2OutlinedIcon />,
           component: <SettingsSection title="Ölçü Birimleri" icon={<Inventory2OutlinedIcon fontSize="small" />}><UnitsTab /></SettingsSection>
+        },
+        {
+          label: "Ürün Aktarım Ayarları",
+          icon: <UploadFileOutlinedIcon />,
+          component: <SettingsSection title="Ürün İçe Aktarma Varsayılanları" icon={<UploadFileOutlinedIcon fontSize="small" />}><ProductImportSettingsTab /></SettingsSection>
         }
       );
     }
@@ -2054,6 +2327,11 @@ export function SettingsPage() {
   useEffect(() => {
     if (tabParam === "system" || tabParam === "update" || tabParam === "guncelleme") {
       const idx = tabsConfig.findIndex((t: any) => t.label === "Sistem Güncelleme");
+      if (idx !== -1) {
+        setActiveTab(idx);
+      }
+    } else if (tabParam === "import" || tabParam === "aktarim") {
+      const idx = tabsConfig.findIndex((t: any) => t.label === "Ürün Aktarım Ayarları");
       if (idx !== -1) {
         setActiveTab(idx);
       }

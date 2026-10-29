@@ -430,8 +430,26 @@ export type ImportPriceResult = {
 
 // ─── Bulk Product Import Types ────────────────────────────────────────────────
 
+export type ImportColumnInfoDto = {
+  index: number;
+  letter: string;
+  headerName: string;
+  sampleValue?: string | null;
+  columnNumber?: number;
+  columnName?: string;
+};
+
+export type ProductImportDetectedColumnsDto = {
+  barcodeCol?: number | null;
+  nameCol?: number | null;
+  salePriceCol?: number | null;
+  purchasePriceCol?: number | null;
+  headerRow?: number | null;
+};
+
 export type ProductImportPreviewItem = {
   rowNumber: number;
+  sheetName?: string;
   code: string;
   barcode: string;
   name: string;
@@ -441,10 +459,12 @@ export type ProductImportPreviewItem = {
   suggestedBrandName: string | null;
   unitCode: string;
   purchasePrice: number;
+  oldPurchasePrice?: number | null;
   salePrice: number;
+  oldSalePrice?: number | null;
   minStock: number;
   initialStock: number;
-  status: "New" | "Existing" | "Error";
+  status: "New" | "Existing" | "Unchanged" | "Error";
   errorMessage: string | null;
 };
 
@@ -452,8 +472,39 @@ export type ProductImportPreviewResult = {
   totalRows: number;
   newCount: number;
   existingCount: number;
+  unchangedCount: number;
   errorCount: number;
+  availableSheets: string[];
+  selectedSheet?: string | null;
+  detectedColumns: ProductImportDetectedColumnsDto;
+  availableColumns: ImportColumnInfoDto[];
   rows: ProductImportPreviewItem[];
+  rawRows?: { rowNumber: number; cells: string[] }[];
+};
+
+export type ProductImportSettingsDto = {
+  defaultCategoryId: string | null;
+  defaultCategoryName: string | null;
+  defaultBrandId: string | null;
+  defaultBrandName: string | null;
+  defaultUnitId: string | null;
+  defaultUnitName: string | null;
+  defaultMinStock: number;
+  defaultInitialStock: number;
+  autoCategoryEnabled: boolean;
+  autoBrandEnabled: boolean;
+  sanitizeBarcode: boolean;
+};
+
+export type UpdateProductImportSettingsRequest = {
+  defaultCategoryId?: string | null;
+  defaultBrandId?: string | null;
+  defaultUnitId?: string | null;
+  defaultMinStock?: number;
+  defaultInitialStock?: number;
+  autoCategoryEnabled?: boolean;
+  autoBrandEnabled?: boolean;
+  sanitizeBarcode?: boolean;
 };
 
 export type ProductImportRowItem = {
@@ -472,6 +523,7 @@ export type ProductImportRowItem = {
 export type ProductImportCommitRequest = {
   duplicateAction: "update" | "skip" | "fail";
   items: ProductImportRowItem[];
+  applyBrandCategoryToExisting?: boolean;
 };
 
 export type ProductImportResult = {

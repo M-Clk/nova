@@ -171,6 +171,30 @@ public class ProductsController(IProductService products, IPosService pos) : Con
     }
 
     /// <summary>
+    /// Akıllı ürün içe aktarma varsayılan ayarlarını getirir.
+    /// </summary>
+    [HttpGet("import-settings")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> GetImportSettings(CancellationToken cancellationToken)
+    {
+        var settings = await products.GetImportSettingsAsync(cancellationToken);
+        return Ok(settings);
+    }
+
+    /// <summary>
+    /// Akıllı ürün içe aktarma varsayılan ayarlarını günceller.
+    /// </summary>
+    [HttpPut("import-settings")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> UpdateImportSettings(
+        [FromBody] UpdateProductImportSettingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var settings = await products.UpdateImportSettingsAsync(request, cancellationToken);
+        return Ok(settings);
+    }
+
+    /// <summary>
     /// Yüklenen Excel dosyasını parse eder, doğrular ve önizleme döner. DB'ye yazmaz.
     /// </summary>
     [HttpPost("import-preview")]
@@ -178,7 +202,13 @@ public class ProductsController(IProductService products, IPosService pos) : Con
     [RequestSizeLimit(15 * 1024 * 1024)] // 15 MB
     public async Task<IActionResult> PreviewProductImport(
         IFormFile file,
-        CancellationToken cancellationToken)
+        [FromQuery] string? sheetName = null,
+        [FromQuery] int? barcodeCol = null,
+        [FromQuery] int? nameCol = null,
+        [FromQuery] int? salePriceCol = null,
+        [FromQuery] int? purchasePriceCol = null,
+        [FromQuery] bool? sanitizeBarcode = null,
+        CancellationToken cancellationToken = default)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "Dosya seçilmedi veya boş." });
@@ -189,8 +219,18 @@ public class ProductsController(IProductService products, IPosService pos) : Con
 
         try
         {
+            var options = new ProductImportPreviewOptions
+            {
+                SheetName = sheetName,
+                BarcodeCol = barcodeCol,
+                NameCol = nameCol,
+                SalePriceCol = salePriceCol,
+                PurchasePriceCol = purchasePriceCol,
+                SanitizeBarcode = sanitizeBarcode
+            };
+
             using var stream = file.OpenReadStream();
-            var result = await products.PreviewProductImportAsync(stream, cancellationToken);
+            var result = await products.PreviewProductImportAsync(stream, options, cancellationToken);
             return Ok(result);
         }
         catch (Exception ex)
