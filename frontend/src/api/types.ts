@@ -560,3 +560,59 @@ export interface UpdateCheckResponse {
   history?: VersionHistoryItem[];
   message: string;
 }
+
+
+// ─── Dashboard Types ─────────────────────────────────────────────────────────
+
+export type DashboardSalesTrendPointDto = {
+  label: string;
+  amount: number;
+};
+
+export type DashboardCategoryStockDto = {
+  name: string;
+  quantity: number;
+  percentage: number;
+};
+
+export type DashboardTopProductDto = {
+  code: string;
+  name: string;
+  quantity: number;
+  unitName: string;
+  categoryName: string;
+};
+
+export type DashboardRecentSaleDto = {
+  id: string;
+  saleNo: string;
+  customerName?: string | null;
+  netAmount: number;
+  totalAmount: number;
+  discountAmount: number;
+  createdAt: string;
+};
+
+export type DashboardLowStockItemDto = {
+  id: string;
+  code: string;
+  name: string;
+  categoryName: string;
+  unitName: string;
+  currentStock: number;
+  minStock: number;
+};
+
+export type DashboardSummaryDto = {
+  totalNetSales: number;
+  totalSalesCount: number;
+  totalInventoryCost: number;
+  totalStockQuantity: number;
+  totalProductsCount: number;
+  salesTrend: DashboardSalesTrendPointDto[];
+  categoryStockDistribution: DashboardCategoryStockDto[];
+  topSellingProducts: DashboardTopProductDto[];
+  recentSales: DashboardRecentSaleDto[];
+  lowStockAlerts: DashboardLowStockItemDto[];
+  lowStockCount: number;
+};

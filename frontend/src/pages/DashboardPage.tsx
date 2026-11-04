@@ -1,17 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { 
-  Grid, 
-  Paper, 
-  Stack, 
-  Typography, 
-  Box, 
-  useTheme, 
-  List, 
-  ListItem, 
-  ListItemText, 
-  ListItemAvatar, 
-  Avatar, 
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  Grid,
+  Paper,
+  Stack,
+  Typography,
+  Box,
+  useTheme,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Avatar,
   Divider,
   Chip,
   Button,
@@ -19,7 +20,7 @@ import {
   Skeleton
 } from "@mui/material";
 import { apiClient } from "../api/apiClient";
-import { CurrentStockDto, ProductDto, SaleDto, StockMovementDto } from "../api/types";
+import { DashboardSummaryDto } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 
 // Icons
@@ -53,15 +54,18 @@ function SalesTrendChart({ data }: SalesTrendChartProps) {
 
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
+  const divisor = Math.max(data.length - 1, 1);
 
   const points = data.map((d, i) => {
-    const x = paddingLeft + (i / (data.length - 1)) * chartWidth;
+    const x = paddingLeft + (i / divisor) * chartWidth;
     const y = paddingTop + chartHeight - (d.amount / maxAmount) * chartHeight;
     return { x, y, label: d.label, amount: d.amount };
   });
 
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  const areaPath = `${linePath} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`;
+  const areaPath = points.length > 0
+    ? `${linePath} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`
+    : "";
 
   return (
     <Box sx={{ position: "relative", width: "100%", height: height + 20 }}>
@@ -72,7 +76,7 @@ function SalesTrendChart({ data }: SalesTrendChartProps) {
             <stop offset="100%" stopColor={theme.palette.primary.main} stopOpacity="0.0" />
           </linearGradient>
           <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor={theme.palette.primary.main} floodOpacity="0.3"/>
+            <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor={theme.palette.primary.main} floodOpacity="0.3" />
           </filter>
         </defs>
 
@@ -82,20 +86,20 @@ function SalesTrendChart({ data }: SalesTrendChartProps) {
           const val = maxAmount * (1 - ratio);
           return (
             <g key={index}>
-              <line 
-                x1={paddingLeft} 
-                y1={y} 
-                x2={width - paddingRight} 
-                y2={y} 
-                stroke={theme.palette.divider} 
-                strokeWidth={0.5} 
-                strokeDasharray="4 4" 
+              <line
+                x1={paddingLeft}
+                y1={y}
+                x2={width - paddingRight}
+                y2={y}
+                stroke={theme.palette.divider}
+                strokeWidth={0.5}
+                strokeDasharray="4 4"
               />
-              <text 
-                x={paddingLeft - 8} 
-                y={y + 4} 
-                fill={theme.palette.text.secondary} 
-                fontSize={9} 
+              <text
+                x={paddingLeft - 8}
+                y={y + 4}
+                fill={theme.palette.text.secondary}
+                fontSize={9}
                 fontWeight={500}
                 textAnchor="end"
               >
@@ -106,17 +110,19 @@ function SalesTrendChart({ data }: SalesTrendChartProps) {
         })}
 
         {/* Fill Area */}
-        <path d={areaPath} fill="url(#salesGrad)" />
+        {areaPath && <path d={areaPath} fill="url(#salesGrad)" />}
 
         {/* Stroke Line */}
-        <path 
-          d={linePath} 
-          fill="none" 
-          stroke={theme.palette.primary.main} 
-          strokeWidth={3} 
-          strokeLinecap="round" 
-          strokeLinejoin="round" 
-        />
+        {linePath && (
+          <path
+            d={linePath}
+            fill="none"
+            stroke={theme.palette.primary.main}
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
 
         {/* X Axis Labels (Filtered dynamically to avoid clutter) */}
         {points.map((p, i) => {
@@ -132,12 +138,12 @@ function SalesTrendChart({ data }: SalesTrendChartProps) {
           if (!showLabel) return null;
 
           return (
-            <text 
-              key={i} 
-              x={p.x} 
-              y={height - 8} 
-              fill={theme.palette.text.secondary} 
-              fontSize={10} 
+            <text
+              key={i}
+              x={p.x}
+              y={height - 8}
+              fill={theme.palette.text.secondary}
+              fontSize={10}
               fontWeight={600}
               textAnchor="middle"
             >
@@ -152,9 +158,9 @@ function SalesTrendChart({ data }: SalesTrendChartProps) {
           return (
             <g key={i}>
               <rect
-                x={p.x - chartWidth / (data.length - 1) / 2}
+                x={p.x - chartWidth / divisor / 2}
                 y={paddingTop}
-                width={chartWidth / (data.length - 1)}
+                width={chartWidth / divisor}
                 height={chartHeight}
                 fill="transparent"
                 style={{ cursor: "pointer" }}
@@ -163,18 +169,18 @@ function SalesTrendChart({ data }: SalesTrendChartProps) {
               />
 
               {isHovered && (
-                <line 
-                  x1={p.x} 
-                  y1={paddingTop} 
-                  x2={p.x} 
-                  y2={paddingTop + chartHeight} 
-                  stroke={theme.palette.primary.main} 
-                  strokeWidth={1} 
+                <line
+                  x1={p.x}
+                  y1={paddingTop}
+                  x2={p.x}
+                  y2={paddingTop + chartHeight}
+                  stroke={theme.palette.primary.main}
+                  strokeWidth={1}
                   strokeDasharray="3 3"
                 />
               )}
 
-              {/* Show all circles for small datasets, only show hovered circles for large datasets to keep layout clean */}
+              {/* Show all circles for small datasets, only show hovered circles for large datasets */}
               {(isHovered || data.length <= 7) && (
                 <circle
                   cx={p.x}
@@ -192,7 +198,7 @@ function SalesTrendChart({ data }: SalesTrendChartProps) {
         })}
       </svg>
 
-      {hoveredIdx !== null && (
+      {hoveredIdx !== null && points[hoveredIdx] && (
         <Paper
           elevation={4}
           sx={{
@@ -239,276 +245,172 @@ function SalesTrendChart({ data }: SalesTrendChartProps) {
 
 // ─── Main Page Component ───────────────────────────────────────────────────────
 export function DashboardPage() {
-  const theme = useTheme();
   const { user } = useAuth();
   const isAdminOrManager = user?.role === "Admin" || user?.role === "Manager";
   const [period, setPeriod] = useState<7 | 14 | 30>(7);
-  
-  const products = useQuery({
-    queryKey: ["products"],
-    queryFn: async () => (await apiClient.get<ProductDto[]>("/products")).data
-  });
-  const sales = useQuery({
-    queryKey: ["sales"],
-    queryFn: async () => (await apiClient.get<SaleDto[]>("/sales")).data,
-    enabled: isAdminOrManager
-  });
-  const stock = useQuery({
-    queryKey: ["stock-current"],
-    queryFn: async () => (await apiClient.get<CurrentStockDto[]>("/stock/current")).data
-  });
-  const movements = useQuery({
-    queryKey: ["stock-movements"],
-    queryFn: async () => (await apiClient.get<StockMovementDto[]>("/stock/movements")).data
+
+  // Single fast, aggregated backend query for the entire dashboard
+  const { data: dashboard, isLoading } = useQuery({
+    queryKey: ["dashboard-summary", period],
+    queryFn: async () => (await apiClient.get<DashboardSummaryDto>("/dashboard/summary", { params: { period } })).data,
+    staleTime: 60_000
   });
 
-  // Calculate Net Sales
-  const netSales = useMemo(() => {
-    return sales.data?.reduce((sum, sale) => sum + sale.netAmount, 0) ?? 0;
-  }, [sales.data]);
-
-  // Calculate Total Quantity of Stock
-  const totalStock = useMemo(() => {
-    return stock.data?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
-  }, [stock.data]);
-
-  // Calculate Total Stock Cost (Alış Envanter Maliyeti)
-  const totalInventoryCost = useMemo(() => {
-    if (!stock.data || !products.data) return 0;
-    return stock.data.reduce((sum, item) => {
-      const prod = products.data.find(p => p.code === item.productCode);
-      if (prod) {
-        return sum + (item.quantity * prod.purchasePrice);
-      }
-      return sum;
-    }, 0);
-  }, [stock.data, products.data]);
-
-  // Calculate low stock products
-  const lowStockItems = useMemo(() => {
-    return (products.data ?? []).map(p => {
-      const stockItem = (stock.data ?? []).find(s => s.productCode === p.code);
-      const quantity = stockItem ? stockItem.quantity : 0;
-      return {
-        ...p,
-        currentStock: quantity
-      };
-    }).filter(p => p.currentStock < p.minStock);
-  }, [products.data, stock.data]);
-
-  // Latest 5 sales
-  const recentSales = useMemo(() => {
-    return [...(sales.data ?? [])].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    ).slice(0, 5);
-  }, [sales.data]);
-
-  // Top 5 selling products based on stock movements (type = 1 (Out/Sale), isCancelled = false)
-  const topSellingProducts = useMemo(() => {
-    if (!movements.data) return [];
-    const salesMap: Record<string, { code: string; name: string; quantity: number; unitName: string; categoryName: string }> = {};
-    
-    movements.data.forEach(m => {
-      if (m.type === 1 && !m.isCancelled) {
-        const key = m.productCode;
-        if (!salesMap[key]) {
-          const prod = products.data?.find(p => p.code === m.productCode);
-          salesMap[key] = {
-            code: m.productCode,
-            name: m.productName,
-            quantity: 0,
-            unitName: prod?.unitName ?? "Adet",
-            categoryName: prod?.categoryName ?? "Genel"
-          };
-        }
-        salesMap[key].quantity += m.quantity;
-      }
-    });
-
-    return Object.values(salesMap)
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 5);
-  }, [movements.data, products.data]);
-
-  // Stock quantity distribution by Category
-  const categoryStockData = useMemo(() => {
-    if (!stock.data || !products.data) return [];
-    const catMap: Record<string, number> = {};
-    stock.data.forEach(item => {
-      const prod = products.data?.find(p => p.code === item.productCode);
-      const cat = prod?.categoryName ?? "Diğer";
-      catMap[cat] = (catMap[cat] ?? 0) + item.quantity;
-    });
-
-    const total = Object.values(catMap).reduce((sum, v) => sum + v, 0);
-    return Object.entries(catMap)
-      .map(([name, quantity]) => ({
-        name,
-        quantity,
-        percentage: total > 0 ? (quantity / total) * 100 : 0
-      }))
-      .sort((a, b) => b.quantity - a.quantity);
-  }, [stock.data, products.data]);
-
-  // Sales Trend dynamically calculated from selected period
-  const salesTrendData = useMemo(() => {
-    const daysCount = period;
-    const lastDays = Array.from({ length: daysCount }, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (daysCount - 1 - i));
-      return d;
-    });
-
-    return lastDays.map(date => {
-      const dateStr = date.toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
-      const dateKey = date.toDateString();
-      
-      const daySales = (sales.data ?? []).filter(sale => {
-        const saleDate = new Date(sale.createdAt);
-        return saleDate.toDateString() === dateKey;
-      });
-      const totalAmount = daySales.reduce((sum, s) => sum + s.netAmount, 0);
-      return {
-        label: dateStr,
-        amount: totalAmount
-      };
-    });
-  }, [sales.data, period]);
-
-  const categoryStockPanel = (height: number | string) => (
-    <Paper sx={{ p: 3, display: "flex", flexDirection: "column", height, borderRadius: 2 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-        <Avatar 
-          sx={{ 
-            bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.08)", 
-            width: 32, 
-            height: 32 
-          }}
-        >
-          <CategoryOutlinedIcon sx={{ color: (theme) => theme.palette.warning.main, fontSize: 18 }} />
-        </Avatar>
-        <Typography variant="h6" fontWeight={700}>
-          Kategori Stok Dağılımı
-        </Typography>
-      </Box>
-      <Divider sx={{ mb: 2 }} />
-      <Box sx={{ flex: 1, overflowY: "auto", pr: 0.5 }}>
-        {stock.isLoading || products.isLoading ? (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Box key={i}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
-                  <Skeleton variant="text" width="45%" height={18} />
-                  <Skeleton variant="text" width="25%" height={18} />
+  const categoryStockPanel = (height: number | string) => {
+    const catData = dashboard?.categoryStockDistribution ?? [];
+    return (
+      <Paper sx={{ p: 3, display: "flex", flexDirection: "column", height, borderRadius: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+          <Avatar
+            sx={{
+              bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.08)",
+              width: 32,
+              height: 32
+            }}
+          >
+            <CategoryOutlinedIcon sx={{ color: (theme) => theme.palette.warning.main, fontSize: 18 }} />
+          </Avatar>
+          <Typography variant="h6" fontWeight={700}>
+            Kategori Stok Dağılımı
+          </Typography>
+        </Box>
+        <Divider sx={{ mb: 2 }} />
+        <Box sx={{ flex: 1, overflowY: "auto", pr: 0.5 }}>
+          {isLoading ? (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Box key={i}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+                    <Skeleton variant="text" width="45%" height={18} />
+                    <Skeleton variant="text" width="25%" height={18} />
+                  </Box>
+                  <Skeleton variant="rectangular" width="100%" height={6} sx={{ borderRadius: 3 }} animation="wave" />
                 </Box>
-                <Skeleton variant="rectangular" width="100%" height={6} sx={{ borderRadius: 3 }} animation="wave" />
+              ))}
+            </Box>
+          ) : catData.length === 0 ? (
+            <Typography color="text.secondary">Stok kaydı bulunamadı.</Typography>
+          ) : (
+            catData.slice(0, 5).map((cat) => (
+              <Box key={cat.name} sx={{ mb: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+                  <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: "60%" }}>{cat.name}</Typography>
+                  <Typography variant="body2" color="text.secondary" fontWeight={700}>
+                    {cat.quantity.toLocaleString("tr-TR")} ({cat.percentage.toFixed(0)}%)
+                  </Typography>
+                </Box>
+                <Box sx={{ width: "100%", height: 6, bgcolor: "action.hover", borderRadius: 3, overflow: "hidden" }}>
+                  <Box
+                    sx={{
+                      width: `${cat.percentage}%`,
+                      height: "100%",
+                      borderRadius: 3,
+                      background: (theme) => `linear-gradient(90deg, ${theme.palette.warning.main} 0%, ${theme.palette.warning.light} 100%)`,
+                      transition: "width 1s ease"
+                    }}
+                  />
+                </Box>
+              </Box>
+            ))
+          )}
+        </Box>
+      </Paper>
+    );
+  };
+
+  const lowStockPanel = (height: number | string) => {
+    const lowStockAlerts = dashboard?.lowStockAlerts ?? [];
+    const lowStockCount = dashboard?.lowStockCount ?? 0;
+    return (
+      <Paper sx={{ p: 3, height: "100%", minHeight: height, display: "flex", flexDirection: "column", borderRadius: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
+          <Avatar
+            sx={{
+              bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 68, 68, 0.15)" : "rgba(239, 68, 68, 0.08)",
+              width: 32,
+              height: 32
+            }}
+          >
+            <WarningAmberOutlinedIcon sx={{ color: (theme) => theme.palette.error.main, fontSize: 18 }} />
+          </Avatar>
+          <Typography variant="h6" fontWeight={700}>
+            Düşük Stok Uyarıları
+          </Typography>
+          <Chip
+            label={`${lowStockCount} ürün`}
+            color="error"
+            size="small"
+            sx={{ ml: "auto", fontWeight: 600, fontSize: "0.75rem" }}
+          />
+        </Box>
+        <Divider />
+        {isLoading ? (
+          <Box sx={{ flex: 1, pt: 2 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.5, borderBottom: i < 3 ? "1px solid" : "none", borderColor: "divider" }}>
+                <Skeleton variant="circular" width={28} height={28} />
+                <Box sx={{ flex: 1 }}>
+                  <Skeleton variant="text" width="60%" height={18} />
+                  <Skeleton variant="text" width="40%" height={14} />
+                </Box>
+                <Box sx={{ textAlign: "right" }}>
+                  <Skeleton variant="text" width={50} height={18} />
+                  <Skeleton variant="text" width={40} height={14} />
+                </Box>
               </Box>
             ))}
           </Box>
-        ) : categoryStockData.length === 0 ? (
-          <Typography color="text.secondary">Stok kaydı bulunamadı.</Typography>
+        ) : lowStockAlerts.length === 0 ? (
+          <Box sx={{ py: 8, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Typography color="text.secondary">Tüm ürünlerin stok seviyesi yeterli.</Typography>
+          </Box>
         ) : (
-          categoryStockData.slice(0, 5).map((cat) => (
-            <Box key={cat.name} sx={{ mb: 2 }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
-                <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: "60%" }}>{cat.name}</Typography>
-                <Typography variant="body2" color="text.secondary" fontWeight={700}>
-                  {cat.quantity.toLocaleString("tr-TR")} ({cat.percentage.toFixed(0)}%)
-                </Typography>
-              </Box>
-              <Box sx={{ width: "100%", height: 6, bgcolor: "action.hover", borderRadius: 3, overflow: "hidden" }}>
-                <Box 
-                  sx={{ 
-                    width: `${cat.percentage}%`, 
-                    height: "100%", 
-                    borderRadius: 3,
-                    background: (theme) => `linear-gradient(90deg, ${theme.palette.warning.main} 0%, ${theme.palette.warning.light} 100%)`,
-                    transition: "width 1s ease" 
-                  }} 
-                />
-              </Box>
-            </Box>
-          ))
-        )}
-      </Box>
-    </Paper>
-  );
-
-  const lowStockPanel = (height: number | string) => (
-    <Paper sx={{ p: 3, height: "100%", minHeight: height, display: "flex", flexDirection: "column", borderRadius: 2 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
-        <Avatar 
-          sx={{ 
-            bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 68, 68, 0.15)" : "rgba(239, 68, 68, 0.08)", 
-            width: 32, 
-            height: 32 
-          }}
-        >
-          <WarningAmberOutlinedIcon sx={{ color: (theme) => theme.palette.error.main, fontSize: 18 }} />
-        </Avatar>
-        <Typography variant="h6" fontWeight={700}>
-          Düşük Stok Uyarıları
-        </Typography>
-        <Chip 
-          label={`${lowStockItems.length} ürün`} 
-          color="error" 
-          size="small" 
-          sx={{ ml: "auto", fontWeight: 600, fontSize: "0.75rem" }} 
-        />
-      </Box>
-      <Divider />
-      {products.isLoading || stock.isLoading ? (
-        <Box sx={{ flex: 1, pt: 2 }}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.5, borderBottom: i < 3 ? "1px solid" : "none", borderColor: "divider" }}>
-              <Skeleton variant="circular" width={28} height={28} />
-              <Box sx={{ flex: 1 }}>
-                <Skeleton variant="text" width="60%" height={18} />
-                <Skeleton variant="text" width="40%" height={14} />
-              </Box>
-              <Box sx={{ textAlign: "right" }}>
-                <Skeleton variant="text" width={50} height={18} />
-                <Skeleton variant="text" width={40} height={14} />
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      ) : lowStockItems.length === 0 ? (
-        <Box sx={{ py: 8, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Typography color="text.secondary">Tüm ürünlerin stok seviyesi yeterli.</Typography>
-        </Box>
-      ) : (
-        <List sx={{ flex: 1, overflowY: "auto", maxH: 280 }}>
-          {lowStockItems.map((item, idx) => (
-            <Box key={item.id}>
-              <ListItem sx={{ px: 0, py: 1.5 }}>
-                <ListItemAvatar sx={{ minWidth: 40 }}>
-                  <Avatar sx={{ bgcolor: "action.hover", color: "text.primary", width: 28, height: 28 }}>
-                    <Inventory2OutlinedIcon sx={{ fontSize: 16 }} />
-                  </Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={item.name}
-                  secondary={`Kategori: ${item.categoryName}`}
-                  primaryTypographyProps={{ fontWeight: 600, fontSize: "0.875rem" }}
-                  secondaryTypographyProps={{ fontSize: "0.75rem" }}
-                />
-                <Box sx={{ textAlign: "right", ml: 2 }}>
-                  <Typography variant="body2" color="error.main" fontWeight={700}>
-                    {item.currentStock} {item.unitName}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.7rem" }}>
-                    Min: {item.minStock}
-                  </Typography>
+          <>
+            <List sx={{ flex: 1, overflowY: "auto", maxH: 280 }}>
+              {lowStockAlerts.map((item, idx) => (
+                <Box key={item.id}>
+                  <ListItem sx={{ px: 0, py: 1.5 }}>
+                    <ListItemAvatar sx={{ minWidth: 40 }}>
+                      <Avatar sx={{ bgcolor: "action.hover", color: "text.primary", width: 28, height: 28 }}>
+                        <Inventory2OutlinedIcon sx={{ fontSize: 16 }} />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={item.name}
+                      secondary={`Kategori: ${item.categoryName}`}
+                      primaryTypographyProps={{ fontWeight: 600, fontSize: "0.875rem" }}
+                      secondaryTypographyProps={{ fontSize: "0.75rem" }}
+                    />
+                    <Box sx={{ textAlign: "right", ml: 2 }}>
+                      <Typography variant="body2" color="error.main" fontWeight={700}>
+                        {item.currentStock} {item.unitName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.7rem" }}>
+                        Min: {item.minStock}
+                      </Typography>
+                    </Box>
+                  </ListItem>
+                  {idx < lowStockAlerts.length - 1 && <Divider component="li" />}
                 </Box>
-              </ListItem>
-              {idx < lowStockItems.length - 1 && <Divider component="li" />}
-            </Box>
-          ))}
-        </List>
-      )}
-    </Paper>
-  );
+              ))}
+            </List>
+            {lowStockCount > lowStockAlerts.length && (
+              <Box sx={{ pt: 1, textAlign: "center", borderTop: "1px dashed", borderColor: "divider" }}>
+                <Button
+                  component={Link}
+                  to="/reports"
+                  size="small"
+                  sx={{ textTransform: "none", fontSize: "0.75rem", fontWeight: 600 }}
+                >
+                  Tüm Kritik Ürünleri Gör ({lowStockCount})
+                </Button>
+              </Box>
+            )}
+          </>
+        )}
+      </Paper>
+    );
+  };
 
   return (
     <Stack spacing={4}>
@@ -520,69 +422,69 @@ export function DashboardPage() {
           Nova platformunun bugünkü durumuna genel bakış.
         </Typography>
       </Box>
- 
+
       {/* Metrics Row */}
       <Grid container spacing={3}>
         {isAdminOrManager ? (
           <>
             <MetricCard
               title="Net Ciro"
-              value={fmt(netSales)}
+              value={fmt(dashboard?.totalNetSales ?? 0)}
               subtitle="Toplam net kazanç"
               icon={<TrendingUpOutlinedIcon />}
               color="#10B981"
               bgColor="rgba(16, 185, 129, 0.08)"
-              isLoading={sales.isLoading}
+              isLoading={isLoading}
             />
             <MetricCard
               title="Satış Siparişleri"
-              value={sales.data?.length ?? 0}
+              value={dashboard?.totalSalesCount ?? 0}
               subtitle="Tamamlanan satış"
               icon={<ShoppingBagOutlinedIcon />}
               color="#EC4899"
               bgColor="rgba(236, 72, 153, 0.08)"
-              isLoading={sales.isLoading}
+              isLoading={isLoading}
             />
             <MetricCard
               title="Envanter Maliyeti (Alış)"
-              value={fmt(totalInventoryCost)}
-              subtitle={`${totalStock.toLocaleString("tr-TR")} adet ürün stokta`}
+              value={fmt(dashboard?.totalInventoryCost ?? 0)}
+              subtitle={`${(dashboard?.totalStockQuantity ?? 0).toLocaleString("tr-TR")} adet ürün stokta`}
               icon={<AccountBalanceWalletOutlinedIcon />}
               color="#F59E0B"
               bgColor="rgba(245, 158, 11, 0.08)"
-              isLoading={stock.isLoading || products.isLoading}
+              isLoading={isLoading}
             />
             <MetricCard
               title="Ürün Kataloğu"
-              value={products.data?.length ?? 0}
+              value={dashboard?.totalProductsCount ?? 0}
               subtitle="Kayıtlı ürün çeşidi"
               icon={<Inventory2OutlinedIcon />}
               color="#6366F1"
               bgColor="rgba(99, 102, 241, 0.08)"
-              isLoading={products.isLoading}
+              isLoading={isLoading}
             />
           </>
         ) : (
           <>
             <MetricCard
               title="Toplam Stok"
-              value={totalStock.toLocaleString("tr-TR")}
+              value={(dashboard?.totalStockQuantity ?? 0).toLocaleString("tr-TR")}
               subtitle="Depolardaki toplam fiziksel ürün"
               icon={<Inventory2OutlinedIcon />}
               color="#F59E0B"
               bgColor="rgba(245, 158, 11, 0.08)"
               gridWidth={6}
-              isLoading={stock.isLoading}
+              isLoading={isLoading}
             />
             <MetricCard
               title="Ürün Kataloğu"
-              value={products.data?.length ?? 0}
+              value={dashboard?.totalProductsCount ?? 0}
               subtitle="Kayıtlı ürün çeşidi"
               icon={<CategoryOutlinedIcon />}
               color="#6366F1"
               bgColor="rgba(99, 102, 241, 0.08)"
               gridWidth={6}
-              isLoading={products.isLoading}
+              isLoading={isLoading}
             />
           </>
         )}
@@ -598,11 +500,11 @@ export function DashboardPage() {
               <Paper sx={{ p: 3, display: "flex", flexDirection: "column", height: 320, borderRadius: 2 }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Avatar 
-                      sx={{ 
-                        bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(99, 102, 241, 0.15)" : "rgba(99, 102, 241, 0.08)", 
-                        width: 32, 
-                        height: 32 
+                    <Avatar
+                      sx={{
+                        bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(99, 102, 241, 0.15)" : "rgba(99, 102, 241, 0.08)",
+                        width: 32,
+                        height: 32
                       }}
                     >
                       <TrendingUpOutlinedIcon sx={{ color: (theme) => theme.palette.primary.main, fontSize: 18 }} />
@@ -642,15 +544,15 @@ export function DashboardPage() {
                 </Box>
                 <Divider sx={{ mb: 2 }} />
                 <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {sales.isLoading ? (
+                  {isLoading ? (
                     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
                       <CircularProgress size={32} thickness={4} />
                       <Typography variant="caption" color="text.secondary" fontWeight={500}>Veriler yükleniyor...</Typography>
                     </Box>
-                  ) : salesTrendData.length === 0 ? (
+                  ) : (dashboard?.salesTrend ?? []).length === 0 ? (
                     <Typography color="text.secondary">Yeterli satış verisi yok.</Typography>
                   ) : (
-                    <SalesTrendChart data={salesTrendData} />
+                    <SalesTrendChart data={dashboard?.salesTrend ?? []} />
                   )}
                 </Box>
               </Paper>
@@ -668,11 +570,11 @@ export function DashboardPage() {
             <Grid item xs={12} md={4}>
               <Paper sx={{ p: 3, height: "100%", minHeight: 380, display: "flex", flexDirection: "column", borderRadius: 2 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
-                  <Avatar 
-                    sx={{ 
-                      bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(6, 182, 212, 0.15)" : "rgba(6, 182, 212, 0.08)", 
-                      width: 32, 
-                      height: 32 
+                  <Avatar
+                    sx={{
+                      bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(6, 182, 212, 0.15)" : "rgba(6, 182, 212, 0.08)",
+                      width: 32,
+                      height: 32
                     }}
                   >
                     <StarOutlineIcon sx={{ color: (theme) => theme.palette.info?.main ?? "#06B6D4", fontSize: 18 }} />
@@ -682,7 +584,7 @@ export function DashboardPage() {
                   </Typography>
                 </Box>
                 <Divider />
-                {movements.isLoading ? (
+                {isLoading ? (
                   <Box sx={{ flex: 1, pt: 2 }}>
                     {Array.from({ length: 4 }).map((_, i) => (
                       <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.5, borderBottom: i < 3 ? "1px solid" : "none", borderColor: "divider" }}>
@@ -695,24 +597,24 @@ export function DashboardPage() {
                       </Box>
                     ))}
                   </Box>
-                ) : topSellingProducts.length === 0 ? (
+                ) : (dashboard?.topSellingProducts ?? []).length === 0 ? (
                   <Box sx={{ py: 8, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Typography color="text.secondary">Satış hareketi bulunamadı.</Typography>
                   </Box>
                 ) : (
                   <List sx={{ flex: 1, overflowY: "auto", maxH: 280 }}>
-                    {topSellingProducts.map((prod, idx) => (
+                    {(dashboard?.topSellingProducts ?? []).map((prod, idx) => (
                       <Box key={prod.code}>
                         <ListItem sx={{ px: 0, py: 1.5 }}>
                           <ListItemAvatar sx={{ minWidth: 40 }}>
-                            <Avatar 
-                              sx={{ 
-                                bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(6, 182, 212, 0.15)" : "rgba(6, 182, 212, 0.08)", 
-                                color: (theme) => theme.palette.info?.main ?? "#06B6D4", 
-                                fontWeight: 700, 
-                                fontSize: "0.85rem", 
-                                width: 28, 
-                                height: 28 
+                            <Avatar
+                              sx={{
+                                bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(6, 182, 212, 0.15)" : "rgba(6, 182, 212, 0.08)",
+                                color: (theme) => theme.palette.info?.main ?? "#06B6D4",
+                                fontWeight: 700,
+                                fontSize: "0.85rem",
+                                width: 28,
+                                height: 28
                               }}
                             >
                               {idx + 1}
@@ -733,7 +635,7 @@ export function DashboardPage() {
                             </Typography>
                           </Box>
                         </ListItem>
-                        {idx < topSellingProducts.length - 1 && <Divider component="li" />}
+                        {idx < (dashboard?.topSellingProducts ?? []).length - 1 && <Divider component="li" />}
                       </Box>
                     ))}
                   </List>
@@ -745,11 +647,11 @@ export function DashboardPage() {
             <Grid item xs={12} md={4}>
               <Paper sx={{ p: 3, height: "100%", minHeight: 380, display: "flex", flexDirection: "column", borderRadius: 2 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
-                  <Avatar 
-                    sx={{ 
-                      bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(16, 185, 129, 0.15)" : "rgba(16, 185, 129, 0.08)", 
-                      width: 32, 
-                      height: 32 
+                  <Avatar
+                    sx={{
+                      bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(16, 185, 129, 0.15)" : "rgba(16, 185, 129, 0.08)",
+                      width: 32,
+                      height: 32
                     }}
                   >
                     <ShoppingBagOutlinedIcon sx={{ color: (theme) => theme.palette.success.main, fontSize: 18 }} />
@@ -759,7 +661,7 @@ export function DashboardPage() {
                   </Typography>
                 </Box>
                 <Divider />
-                {sales.isLoading ? (
+                {isLoading ? (
                   <Box sx={{ flex: 1, pt: 2 }}>
                     {Array.from({ length: 4 }).map((_, i) => (
                       <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.5, borderBottom: i < 3 ? "1px solid" : "none", borderColor: "divider" }}>
@@ -774,13 +676,13 @@ export function DashboardPage() {
                       </Box>
                     ))}
                   </Box>
-                ) : recentSales.length === 0 ? (
+                ) : (dashboard?.recentSales ?? []).length === 0 ? (
                   <Box sx={{ py: 8, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Typography color="text.secondary">Henüz satış kaydı bulunmuyor.</Typography>
                   </Box>
                 ) : (
                   <List sx={{ flex: 1, overflowY: "auto", maxH: 280 }}>
-                    {recentSales.map((sale, idx) => (
+                    {(dashboard?.recentSales ?? []).map((sale, idx) => (
                       <Box key={sale.id}>
                         <ListItem sx={{ px: 0, py: 1.5 }}>
                           <ListItemText
@@ -808,7 +710,7 @@ export function DashboardPage() {
                             )}
                           </Box>
                         </ListItem>
-                        {idx < recentSales.length - 1 && <Divider component="li" />}
+                        {idx < (dashboard?.recentSales ?? []).length - 1 && <Divider component="li" />}
                       </Box>
                     ))}
                   </List>
@@ -856,18 +758,18 @@ function MetricCard({ title, value, subtitle, icon, color, bgColor, gridWidth = 
 
   return (
     <Grid item xs={12} sm={6} md={gridWidth}>
-      <Paper 
+      <Paper
         className="metric-card"
-        sx={{ 
-          p: 3, 
-          borderRadius: 2, 
+        sx={{
+          p: 3,
+          borderRadius: 2,
           position: "relative",
           overflow: "hidden",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          boxShadow: theme.palette.mode === "dark" 
-            ? `0 4px 20px rgba(0, 0, 0, 0.2)` 
+          boxShadow: theme.palette.mode === "dark"
+            ? `0 4px 20px rgba(0, 0, 0, 0.2)`
             : `0 4px 20px rgba(100, 116, 139, 0.05)`,
         }}
       >
@@ -891,11 +793,11 @@ function MetricCard({ title, value, subtitle, icon, color, bgColor, gridWidth = 
             </>
           )}
         </Box>
-        <Avatar 
-          sx={{ 
-            bgcolor: bgColor, 
-            color: color, 
-            width: 48, 
+        <Avatar
+          sx={{
+            bgcolor: bgColor,
+            color: color,
+            width: 48,
             height: 48,
             boxShadow: `0 2px 8px ${bgColor}`,
             opacity: isLoading ? 0.5 : 1,

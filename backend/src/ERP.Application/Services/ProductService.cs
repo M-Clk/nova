@@ -1312,8 +1312,17 @@ public class ProductService(IErpDbContext db, IProductCategorizationDbService ca
 
             Product? existing = null;
             var cleanKey = CleanBarcode(barcode, true);
-            if (productByBarcode.TryGetValue(cleanKey, out var p1)) existing = p1;
-            else if (productByCode.TryGetValue(cleanKey, out var p2)) existing = p2;
+
+            // 1. Önce Code (benzersiz anahtar) ile eşleşen var mı kontrol et
+            if (productByCode.TryGetValue(cleanKey, out var pByCode))
+            {
+                existing = pByCode;
+            }
+            // 2. Yoksa Barcode ile eşleşen var mı kontrol et
+            else if (productByBarcode.TryGetValue(cleanKey, out var pByBarcode))
+            {
+                existing = pByBarcode;
+            }
 
             if (existing != null)
             {
@@ -1326,7 +1335,20 @@ public class ProductService(IErpDbContext db, IProductCategorizationDbService ca
                 // Update / Override
                 existing.Name = item.Name.Trim();
                 existing.Barcode = barcode;
-                existing.Code = code;
+
+                // Güvenli Kod Güncelleme:
+                // Yalnızca hedef 'code' veritabanında başka bir ürüne ait DEĞİLSE güncelle!
+                // Başka bir ürünün koduyla çakışma varsa mevcut Code'u koru, böylece IX_Products_Code asla ihlal edilmez.
+                var cleanExistingCode = CleanBarcode(existing.Code, true);
+                if (!string.Equals(cleanExistingCode, cleanKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    bool isCodeTakenByAnother = productByCode.TryGetValue(cleanKey, out var other) && other.Id != existing.Id;
+                    if (!isCodeTakenByAnother)
+                    {
+                        existing.Code = code;
+                        productByCode[cleanKey] = existing;
+                    }
+                }
 
                 if (item.MinStock > 0)
                 {
@@ -1459,8 +1481,21 @@ public class ProductService(IErpDbContext db, IProductCategorizationDbService ca
             }
         }
 
-        await db.SaveChangesAsync(cancellationToken);
-        await tx.CommitAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            var innerMsg = ex.InnerException?.Message ?? ex.Message;
+            if (innerMsg.Contains("23505") || innerMsg.Contains("IX_Products_Code") || innerMsg.Contains("duplicate key"))
+            {
+                throw new InvalidOperationException("İçe aktarma sırasında mükerrer ürün kodu çakışması tespit edildi. Dosyadaki ürün kodlarının/barkodlarının benzersiz olduğundan ve mevcut ürünlerle çakışmadığından emin olun.");
+            }
+            throw;
+        }
 
         return new ProductImportResult(insertedCount, updatedCount, skippedCount, request.Items.Count, batchId);
     }

@@ -2,7 +2,9 @@ import { FormEvent, useState, useEffect, useRef, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   Button, 
-  MenuItem, 
+  MenuItem,
+  Menu,
+  ListItemIcon, 
   Paper, 
   Stack, 
   TextField, 
@@ -54,6 +56,7 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import ReplayIcon from "@mui/icons-material/Replay";
 import PostAddOutlinedIcon from "@mui/icons-material/PostAddOutlined";
+import ImportExportIcon from "@mui/icons-material/ImportExport";
 import { DataTable } from "../components/DataTable";
 import { BulkProductImportDialog } from "../components/BulkProductImportDialog";
 import { apiClient } from "../api/apiClient";
@@ -129,6 +132,8 @@ export function ProductsPage() {
 
   // Toplu Ürün Yükleme (Excel) dialog
   const [bulkProductImportOpen, setBulkProductImportOpen] = useState(false);
+  const [importExportAnchorEl, setImportExportAnchorEl] = useState<null | HTMLElement>(null);
+  const isImportExportOpen = Boolean(importExportAnchorEl);
 
   // Fiyat Geçmişi Drawer
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -443,7 +448,7 @@ export function ProductsPage() {
   };
 
   // Mevcut filtrelerle şablon xlsx indir (aynı export endpoint'i)
-  const downloadTemplate = async () => {
+  const downloadExport = async (filenamePrefix = "urun_listesi") => {
     setIsExporting(true);
     try {
       const response = await apiClient.get("/products/export", {
@@ -458,17 +463,19 @@ export function ProductsPage() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `fiyat_guncelleme_sablonu_${new Date().toISOString().split("T")[0]}.xlsx`);
+      link.setAttribute("download", `${filenamePrefix}_${new Date().toISOString().split("T")[0]}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch {
-      setSnack({ open: true, message: "Şablon indirilemedi.", severity: "error" });
+      setSnack({ open: true, message: "Dosya indirilemedi.", severity: "error" });
     } finally {
       setIsExporting(false);
     }
   };
+
+  const downloadTemplate = () => downloadExport("fiyat_guncelleme_sablonu");
 
   // ─── Diğer helpers ───────────────────────────────────────────────────────────
 
@@ -533,24 +540,101 @@ export function ProductsPage() {
             </Tooltip>
           )}
 
-          {/* CSV Import */}
+          {/* İçe / Dışa Aktar Menüsü */}
           {canManage && (
-            <Button variant="outlined" size="small" startIcon={<FileUploadOutlinedIcon />}
-              onClick={openImportDialog}
-              sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600, px: 2.5, py: 1.1,
-                    transition: "all 0.2s ease", "&:hover": { transform: "translateY(-1px)" } }}>
-              Fiyat İçe Aktar
-            </Button>
-          )}
+            <>
+              <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                startIcon={<ImportExportIcon />}
+                endIcon={<ExpandMoreIcon />}
+                onClick={(e) => setImportExportAnchorEl(e.currentTarget)}
+                sx={{
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontWeight: 700,
+                  px: 2,
+                  py: 1,
+                  transition: "all 0.2s ease",
+                  "&:hover": { transform: "translateY(-1px)" }
+                }}
+              >
+                İçe / Dışa Aktar
+              </Button>
+              <Menu
+                anchorEl={importExportAnchorEl}
+                open={isImportExportOpen}
+                onClose={() => setImportExportAnchorEl(null)}
+                transformOrigin={{ horizontal: "right", vertical: "top" }}
+                anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+                PaperProps={{
+                  sx: {
+                    borderRadius: 2,
+                    minWidth: 260,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                    mt: 1
+                  }
+                }}
+              >
+                <MenuItem
+                  onClick={() => {
+                    setImportExportAnchorEl(null);
+                    setBulkProductImportOpen(true);
+                  }}
+                  sx={{ py: 1.2 }}
+                >
+                  <ListItemIcon>
+                    <PostAddOutlinedIcon fontSize="small" color="primary" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Toplu Ürün Yükle"
+                    secondary="Excel'den yeni ürün veya güncelleme"
+                    primaryTypographyProps={{ fontWeight: 600, fontSize: "0.875rem" }}
+                    secondaryTypographyProps={{ fontSize: "0.75rem" }}
+                  />
+                </MenuItem>
 
-          {/* Toplu Ürün Yükleme (Excel) */}
-          {canManage && (
-            <Button variant="outlined" color="primary" size="small" startIcon={<PostAddOutlinedIcon />}
-              onClick={() => setBulkProductImportOpen(true)}
-              sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700, px: 2.5, py: 1.1,
-                    transition: "all 0.2s ease", "&:hover": { transform: "translateY(-1px)" } }}>
-              Toplu Ürün Yükle
-            </Button>
+                <MenuItem
+                  onClick={() => {
+                    setImportExportAnchorEl(null);
+                    openImportDialog();
+                  }}
+                  sx={{ py: 1.2 }}
+                >
+                  <ListItemIcon>
+                    <FileUploadOutlinedIcon fontSize="small" color="warning" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Fiyat İçe Aktar"
+                    secondary="Hızlı fiyat güncelleme ve şablon"
+                    primaryTypographyProps={{ fontWeight: 600, fontSize: "0.875rem" }}
+                    secondaryTypographyProps={{ fontSize: "0.75rem" }}
+                  />
+                </MenuItem>
+
+                <Divider sx={{ my: 0.5 }} />
+
+                <MenuItem
+                  onClick={() => {
+                    setImportExportAnchorEl(null);
+                    downloadExport("urun_listesi");
+                  }}
+                  disabled={isExporting}
+                  sx={{ py: 1.2 }}
+                >
+                  <ListItemIcon>
+                    <FileDownloadOutlinedIcon fontSize="small" color="action" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={isExporting ? "Dışa Aktarılıyor..." : "Excel'e Aktar"}
+                    secondary="Mevcut listeyi Excel (.xlsx) olarak indir"
+                    primaryTypographyProps={{ fontWeight: 600, fontSize: "0.875rem" }}
+                    secondaryTypographyProps={{ fontSize: "0.75rem" }}
+                  />
+                </MenuItem>
+              </Menu>
+            </>
           )}
 
 

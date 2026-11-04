@@ -36,6 +36,7 @@ public static class DependencyInjection
 
         // ─── Report Services ─────────────────────────────────────────────
         services.AddScoped<IStockReportService, StockReportService>();
+        services.AddScoped<IDashboardService, DashboardService>();
 
         return services;
     }
