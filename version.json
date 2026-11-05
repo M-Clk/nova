@@ -1,8 +1,13 @@
 {
-  "version": "1.6.1",
-  "releaseNotes": "Toplu ürün ekleme/güncellemede hatalar giderildi. Ana ekran açılışında performans iyileştirmesi yapıldı.",
+  "version": "1.6.2",
+  "releaseNotes": "Toplu ürün ekleme/güncellemede mükerrer ürün seçimi hatası giderildi.",
   "releaseDate": "2026-11-05",
   "history": [
+    {
+      "version": "1.6.2",
+      "releaseNotes": "Toplu ürün ekleme/güncellemede mükerrer ürün seçimi hatası giderildi.",
+      "releaseDate": "2026-11-05"
+    },
     {
       "version": "1.6.1",
       "releaseNotes": "Toplu ürün ekleme/güncellemede hatalar giderildi. Ana ekran açılışında performans iyileştirmesi yapıldı.",
