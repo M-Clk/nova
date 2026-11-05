@@ -991,12 +991,8 @@ public class ProductService(IErpDbContext db, IProductCategorizationDbService ca
                     existingByCode[c] = (p.Id, p.Code, p.Barcode, p.Name, p.SalePrice, p.PurchasePrice);
             }
 
-            var seenBarcodesInBatch = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var items = new List<ProductImportPreviewItem>();
-            int newCount = 0;
-            int existingCount = 0;
-            int unchangedCount = 0;
-            int errorCount = 0;
+            // ─── 1. Aşama: Dosyadaki geçerli aday satırları topla (Pass 1) ───────────
+            var allCandidates = new List<ParsedRowCandidate>();
 
             foreach (var ws in sheetsToProcess)
             {
@@ -1027,13 +1023,14 @@ public class ProductService(IErpDbContext db, IProductCategorizationDbService ca
                     var cleanBarcode = CleanBarcode(rawBarcode, sanitizeBarcode);
                     var name = row.Cell(nameCol).GetString().Trim();
 
-                    decimal salePrice = salePriceCol > 0 ? ParseDecimalCell(row.Cell(salePriceCol)) : 0;
-                    decimal purchasePrice = purchasePriceCol > 0 ? ParseDecimalCell(row.Cell(purchasePriceCol)) : 0;
+                    var (salePrice, isSaleExplicit) = salePriceCol > 0 ? ParseDecimalCellWithInfo(row.Cell(salePriceCol)) : (0m, false);
+                    var (purchasePrice, isPurchaseExplicit) = purchasePriceCol > 0 ? ParseDecimalCellWithInfo(row.Cell(purchasePriceCol)) : (0m, false);
 
                     // Eğer satış fiyatı boşsa ama alış/bayi fiyatı varsa fiyat moduna göre ata
                     if (salePrice <= 0 && purchasePrice > 0 && settings.PriceMappingMode == "PurchasePriceOnly")
                     {
                         salePrice = purchasePrice;
+                        isSaleExplicit = isPurchaseExplicit;
                     }
 
                     // Filtreleme: Ürün satırı olmayan (bölüm başlıkları, tek hücreli ara başlıklar, dipnotlar ve açıklamalar) satırları sessizce atla
@@ -1042,149 +1039,274 @@ public class ProductService(IErpDbContext db, IProductCategorizationDbService ca
                         continue;
                     }
 
-                    // Hata Kontrolleri: Zorunlu alanlar (Barkod, Ürün Adı, Satış Fiyatı)
-                    if (string.IsNullOrWhiteSpace(cleanBarcode))
+                    bool isSet = CheckIfRowIsSet(row, name);
+
+                    allCandidates.Add(new ParsedRowCandidate
                     {
-                        items.Add(new ProductImportPreviewItem(r, "", "", name, "", null, "", null, "ADET", purchasePrice, salePrice, null, null, 0, 0, "Error", "Barkod / Kod eksik veya okunamadı. Sistemde işlem yapabilmek için barkod zorunludur.", ws.Name));
-                        errorCount++;
-                        continue;
-                    }
+                        RowNumber = r,
+                        SheetName = ws.Name,
+                        CleanBarcode = cleanBarcode,
+                        RawBarcode = rawBarcode,
+                        Name = name,
+                        SalePrice = salePrice,
+                        PurchasePrice = purchasePrice,
+                        IsSalePriceExplicit = isSaleExplicit,
+                        IsPurchasePriceExplicit = isPurchaseExplicit,
+                        IsSetRow = isSet
+                    });
+                }
+            }
 
-                    if (string.IsNullOrWhiteSpace(name))
+            // ─── 2. Aşama: Mükerrer / Set / Münferit Çelişkilerini Akıllı Çözümle (Pass 2) ───
+            var items = new List<ProductImportPreviewItem>();
+            int newCount = 0;
+            int existingCount = 0;
+            int unchangedCount = 0;
+            int errorCount = 0;
+
+            async Task ProcessValidCandidateAsync(ParsedRowCandidate c, string? customNote)
+            {
+                bool hasExisting = existingByBarcode.TryGetValue(c.CleanBarcode, out var existing) ||
+                                   existingByCode.TryGetValue(c.CleanBarcode, out existing);
+
+                string? suggestedCat = null;
+                string? suggestedBr = null;
+
+                if (hasExisting)
+                {
+                    bool saleChanged = Math.Abs(existing.SalePrice - c.SalePrice) > 0.001m;
+                    bool purchaseChanged = c.PurchasePrice > 0 && Math.Abs(existing.PurchasePrice - c.PurchasePrice) > 0.001m;
+
+                    if (saleChanged || purchaseChanged)
                     {
-                        items.Add(new ProductImportPreviewItem(r, cleanBarcode, cleanBarcode, "", "", null, "", null, "ADET", purchasePrice, salePrice, null, null, 0, 0, "Error", "Ürün adı boş.", ws.Name));
-                        errorCount++;
-                        continue;
-                    }
+                        var diffList = new List<string>();
+                        if (saleChanged) diffList.Add($"Satış: ₺{existing.SalePrice:N2} ➔ ₺{c.SalePrice:N2}");
+                        if (purchaseChanged) diffList.Add($"Alış: ₺{existing.PurchasePrice:N2} ➔ ₺{c.PurchasePrice:N2}");
+                        var diffMsg = string.Join(" | ", diffList);
+                        if (!string.IsNullOrEmpty(customNote)) diffMsg += $" ({customNote})";
 
-                    if (salePrice <= 0 && purchasePrice <= 0)
-                    {
-                        items.Add(new ProductImportPreviewItem(r, cleanBarcode, cleanBarcode, name, "", null, "", null, "ADET", purchasePrice, salePrice, null, null, 0, 0, "Error", "Satış fiyatı belirtilmemiş veya 0.", ws.Name));
-                        errorCount++;
-                        continue;
-                    }
-
-                    if (seenBarcodesInBatch.Contains(cleanBarcode))
-                    {
-                        items.Add(new ProductImportPreviewItem(r, cleanBarcode, cleanBarcode, name, "", null, "", null, "ADET", purchasePrice, salePrice, null, null, 0, 0, "Error", $"Dosya içinde mükerrer barkod ('{cleanBarcode}').", ws.Name));
-                        errorCount++;
-                        continue;
-                    }
-                    seenBarcodesInBatch.Add(cleanBarcode);
-
-                    // Sistemde mevcut mu kontrolü
-                    bool hasExisting = existingByBarcode.TryGetValue(cleanBarcode, out var existing) ||
-                                       existingByCode.TryGetValue(cleanBarcode, out existing);
-
-                    string? suggestedCat = null;
-                    string? suggestedBr = null;
-
-                    if (hasExisting)
-                    {
-                        bool saleChanged = Math.Abs(existing.SalePrice - salePrice) > 0.001m;
-                        bool purchaseChanged = purchasePrice > 0 && Math.Abs(existing.PurchasePrice - purchasePrice) > 0.001m;
-
-                        if (saleChanged || purchaseChanged)
-                        {
-                            var diffList = new List<string>();
-                            if (saleChanged) diffList.Add($"Satış: ₺{existing.SalePrice:N2} ➔ ₺{salePrice:N2}");
-                            if (purchaseChanged) diffList.Add($"Alış: ₺{existing.PurchasePrice:N2} ➔ ₺{purchasePrice:N2}");
-                            var diffMsg = string.Join(" | ", diffList);
-
-                            items.Add(new ProductImportPreviewItem(
-                                RowNumber: r,
-                                Code: cleanBarcode,
-                                Barcode: cleanBarcode,
-                                Name: name,
-                                CategoryName: "",
-                                SuggestedCategoryName: null,
-                                BrandName: "",
-                                SuggestedBrandName: null,
-                                UnitCode: "ADET",
-                                PurchasePrice: purchasePrice > 0 ? purchasePrice : existing.PurchasePrice,
-                                SalePrice: salePrice > 0 ? salePrice : existing.SalePrice,
-                                OldPurchasePrice: existing.PurchasePrice,
-                                OldSalePrice: existing.SalePrice,
-                                MinStock: 0,
-                                InitialStock: 0,
-                                Status: "Existing",
-                                ErrorMessage: diffMsg,
-                                SheetName: ws.Name
-                            ));
-                            existingCount++;
-                        }
-                        else
-                        {
-                            items.Add(new ProductImportPreviewItem(
-                                RowNumber: r,
-                                Code: cleanBarcode,
-                                Barcode: cleanBarcode,
-                                Name: name,
-                                CategoryName: "",
-                                SuggestedCategoryName: null,
-                                BrandName: "",
-                                SuggestedBrandName: null,
-                                UnitCode: "ADET",
-                                PurchasePrice: existing.PurchasePrice,
-                                SalePrice: existing.SalePrice,
-                                OldPurchasePrice: existing.PurchasePrice,
-                                OldSalePrice: existing.SalePrice,
-                                MinStock: 0,
-                                InitialStock: 0,
-                                Status: "Unchanged",
-                                ErrorMessage: "Fiyat aynı, değişiklik yok.",
-                                SheetName: ws.Name
-                            ));
-                            unchangedCount++;
-                        }
+                        items.Add(new ProductImportPreviewItem(
+                            RowNumber: c.RowNumber,
+                            Code: c.CleanBarcode,
+                            Barcode: c.CleanBarcode,
+                            Name: c.Name,
+                            CategoryName: "",
+                            SuggestedCategoryName: null,
+                            BrandName: "",
+                            SuggestedBrandName: null,
+                            UnitCode: "ADET",
+                            PurchasePrice: c.PurchasePrice > 0 ? c.PurchasePrice : existing.PurchasePrice,
+                            SalePrice: c.SalePrice > 0 ? c.SalePrice : existing.SalePrice,
+                            OldPurchasePrice: existing.PurchasePrice,
+                            OldSalePrice: existing.SalePrice,
+                            MinStock: 0,
+                            InitialStock: 0,
+                            Status: "Existing",
+                            ErrorMessage: diffMsg,
+                            SheetName: c.SheetName
+                        ));
+                        existingCount++;
                     }
                     else
                     {
-                        // Yeni Ürün - Kategori ve Marka tespiti
-                        if (settings.AutoCategoryEnabled)
-                        {
-                            var catRes = await categorization.SuggestAsync(name, cancellationToken);
-                            suggestedCat = catRes?.SuggestedCategoryName;
-                        }
-                        if (string.IsNullOrEmpty(suggestedCat) && !string.IsNullOrEmpty(settings.DefaultCategoryName))
-                        {
-                            suggestedCat = settings.DefaultCategoryName;
-                        }
-
-                        if (settings.AutoBrandEnabled)
-                        {
-                            var brRes = await branding.SuggestAsync(name, cancellationToken);
-                            suggestedBr = brRes?.SuggestedBrandName;
-                        }
-                        if (string.IsNullOrEmpty(suggestedBr) && !string.IsNullOrEmpty(settings.DefaultBrandName))
-                        {
-                            suggestedBr = settings.DefaultBrandName;
-                        }
+                        string unchangedMsg = !string.IsNullOrEmpty(customNote)
+                            ? $"Fiyat aynı. ({customNote})"
+                            : "Fiyat aynı, değişiklik yok.";
 
                         items.Add(new ProductImportPreviewItem(
-                            RowNumber: r,
-                            Code: cleanBarcode,
-                            Barcode: cleanBarcode,
-                            Name: name,
-                            CategoryName: suggestedCat ?? "Genel",
-                            SuggestedCategoryName: suggestedCat,
-                            BrandName: suggestedBr ?? "Genel",
-                            SuggestedBrandName: suggestedBr,
-                            UnitCode: settings.DefaultUnitName ?? "ADET",
-                            PurchasePrice: purchasePrice,
-                            SalePrice: salePrice,
+                            RowNumber: c.RowNumber,
+                            Code: c.CleanBarcode,
+                            Barcode: c.CleanBarcode,
+                            Name: c.Name,
+                            CategoryName: "",
+                            SuggestedCategoryName: null,
+                            BrandName: "",
+                            SuggestedBrandName: null,
+                            UnitCode: "ADET",
+                            PurchasePrice: existing.PurchasePrice,
+                            SalePrice: existing.SalePrice,
+                            OldPurchasePrice: existing.PurchasePrice,
+                            OldSalePrice: existing.SalePrice,
+                            MinStock: 0,
+                            InitialStock: 0,
+                            Status: "Unchanged",
+                            ErrorMessage: unchangedMsg,
+                            SheetName: c.SheetName
+                        ));
+                        unchangedCount++;
+                    }
+                }
+                else
+                {
+                    // Yeni Ürün - Kategori ve Marka tespiti
+                    if (settings.AutoCategoryEnabled)
+                    {
+                        var catRes = await categorization.SuggestAsync(c.Name, cancellationToken);
+                        suggestedCat = catRes?.SuggestedCategoryName;
+                    }
+                    if (string.IsNullOrEmpty(suggestedCat) && !string.IsNullOrEmpty(settings.DefaultCategoryName))
+                    {
+                        suggestedCat = settings.DefaultCategoryName;
+                    }
+
+                    if (settings.AutoBrandEnabled)
+                    {
+                        var brRes = await branding.SuggestAsync(c.Name, cancellationToken);
+                        suggestedBr = brRes?.SuggestedBrandName;
+                    }
+                    if (string.IsNullOrEmpty(suggestedBr) && !string.IsNullOrEmpty(settings.DefaultBrandName))
+                    {
+                        suggestedBr = settings.DefaultBrandName;
+                    }
+
+                    items.Add(new ProductImportPreviewItem(
+                        RowNumber: c.RowNumber,
+                        Code: c.CleanBarcode,
+                        Barcode: c.CleanBarcode,
+                        Name: c.Name,
+                        CategoryName: suggestedCat ?? "Genel",
+                        SuggestedCategoryName: suggestedCat,
+                        BrandName: suggestedBr ?? "Genel",
+                        SuggestedBrandName: suggestedBr,
+                        UnitCode: settings.DefaultUnitName ?? "ADET",
+                        PurchasePrice: c.PurchasePrice,
+                        SalePrice: c.SalePrice,
+                        OldPurchasePrice: null,
+                        OldSalePrice: null,
+                        MinStock: settings.DefaultMinStock,
+                        InitialStock: settings.DefaultInitialStock,
+                        Status: "New",
+                        ErrorMessage: customNote,
+                        SheetName: c.SheetName
+                    ));
+                    newCount++;
+                }
+            }
+
+            // 1. Barkodu boş olanları hata olarak ekle
+            foreach (var c in allCandidates.Where(c => string.IsNullOrWhiteSpace(c.CleanBarcode)))
+            {
+                items.Add(new ProductImportPreviewItem(
+                    c.RowNumber, "", "", c.Name, "", null, "", null, "ADET", c.PurchasePrice, c.SalePrice, null, null, 0, 0,
+                    "Error", "Barkod / Kod eksik veya okunamadı. Sistemde işlem yapabilmek için barkod zorunludur.", c.SheetName));
+                errorCount++;
+            }
+
+            // 2. Barkodu olanları grupla ve çakışmaları çöz
+            var barcodeGroups = allCandidates
+                .Where(c => !string.IsNullOrWhiteSpace(c.CleanBarcode))
+                .GroupBy(c => c.CleanBarcode, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var group in barcodeGroups)
+            {
+                var groupList = group.ToList();
+
+                if (groupList.Count == 1)
+                {
+                    var c = groupList[0];
+
+                    if (string.IsNullOrWhiteSpace(c.Name))
+                    {
+                        items.Add(new ProductImportPreviewItem(c.RowNumber, c.CleanBarcode, c.CleanBarcode, "", "", null, "", null, "ADET", c.PurchasePrice, c.SalePrice, null, null, 0, 0, "Error", "Ürün adı boş.", c.SheetName));
+                        errorCount++;
+                        continue;
+                    }
+
+                    if (c.SalePrice <= 0 && c.PurchasePrice <= 0)
+                    {
+                        items.Add(new ProductImportPreviewItem(c.RowNumber, c.CleanBarcode, c.CleanBarcode, c.Name, "", null, "", null, "ADET", c.PurchasePrice, c.SalePrice, null, null, 0, 0, "Error", "Satış fiyatı belirtilmemiş veya 0.", c.SheetName));
+                        errorCount++;
+                        continue;
+                    }
+
+                    string? inheritedNote = !c.IsSalePriceExplicit && c.SalePrice > 0
+                        ? $"Set fiyatı (₺{c.SalePrice:N2}) birleştirilmiş hücreden devralındı. Münferit liste fiyatı bulunamadı."
+                        : null;
+
+                    await ProcessValidCandidateAsync(c, inheritedNote);
+                }
+                else
+                {
+                    // Aynı barkoddan birden fazla kayıt var!
+                    // Öncelik Sıralaması:
+                    // 1. Doğrudan (unmerged) kendi hücresinde geçerli fiyat barındıran satırlar
+                    // 2. Eğer birden fazla doğrudan fiyat varsa, Set olmayan (tekil/münferit) satır
+                    // 3. Hiçbirinde doğrudan fiyat yoksa ilk satır
+                    var explicitPriceRows = groupList
+                        .Where(x => x.HasDirectPrice && (x.SalePrice > 0 || x.PurchasePrice > 0))
+                        .ToList();
+
+                    ParsedRowCandidate winningCandidate;
+                    if (explicitPriceRows.Count == 1)
+                    {
+                        winningCandidate = explicitPriceRows[0];
+                    }
+                    else if (explicitPriceRows.Count > 1)
+                    {
+                        var nonSetRows = explicitPriceRows.Where(x => !x.IsSetRow).ToList();
+                        winningCandidate = nonSetRows.Count > 0 ? nonSetRows[0] : explicitPriceRows[0];
+                    }
+                    else
+                    {
+                        winningCandidate = groupList[0];
+                    }
+
+                    var supersededRows = groupList.Where(x => x != winningCandidate).ToList();
+                    bool hasInheritedSuperseded = supersededRows.Any(x => !x.HasDirectPrice || x.SalePrice != winningCandidate.SalePrice);
+
+                    string? winningNote = hasInheritedSuperseded
+                        ? $"Set altındaki mükerrer kayıt yerine bu münferit fiyat (₺{winningCandidate.SalePrice:N2}) uygulandı."
+                        : null;
+
+                    if (string.IsNullOrWhiteSpace(winningCandidate.Name))
+                    {
+                        items.Add(new ProductImportPreviewItem(winningCandidate.RowNumber, winningCandidate.CleanBarcode, winningCandidate.CleanBarcode, "", "", null, "", null, "ADET", winningCandidate.PurchasePrice, winningCandidate.SalePrice, null, null, 0, 0, "Error", "Ürün adı boş.", winningCandidate.SheetName));
+                        errorCount++;
+                    }
+                    else if (winningCandidate.SalePrice <= 0 && winningCandidate.PurchasePrice <= 0)
+                    {
+                        items.Add(new ProductImportPreviewItem(winningCandidate.RowNumber, winningCandidate.CleanBarcode, winningCandidate.CleanBarcode, winningCandidate.Name, "", null, "", null, "ADET", winningCandidate.PurchasePrice, winningCandidate.SalePrice, null, null, 0, 0, "Error", "Satış fiyatı belirtilmemiş veya 0.", winningCandidate.SheetName));
+                        errorCount++;
+                    }
+                    else
+                    {
+                        await ProcessValidCandidateAsync(winningCandidate, winningNote);
+                    }
+
+                    // Ekarte edilen mükerrer satırları kullanıcıya açıkça bilgi vererek ekle
+                    foreach (var loser in supersededRows)
+                    {
+                        string loserMsg = !loser.HasDirectPrice
+                            ? $"Mükerrer set kaydı: Satır {winningCandidate.RowNumber}'deki münferit satış fiyatı (₺{winningCandidate.SalePrice:N2}) esas alındı."
+                            : $"Dosya içinde mükerrer barkod: Satır {winningCandidate.RowNumber}'deki kayıt (₺{winningCandidate.SalePrice:N2}) öncelikli sayıldı.";
+
+                        items.Add(new ProductImportPreviewItem(
+                            RowNumber: loser.RowNumber,
+                            Code: loser.CleanBarcode,
+                            Barcode: loser.CleanBarcode,
+                            Name: loser.Name,
+                            CategoryName: "",
+                            SuggestedCategoryName: null,
+                            BrandName: "",
+                            SuggestedBrandName: null,
+                            UnitCode: "ADET",
+                            PurchasePrice: loser.PurchasePrice,
+                            SalePrice: loser.SalePrice,
                             OldPurchasePrice: null,
                             OldSalePrice: null,
-                            MinStock: settings.DefaultMinStock,
-                            InitialStock: settings.DefaultInitialStock,
-                            Status: "New",
-                            ErrorMessage: null,
-                            SheetName: ws.Name
+                            MinStock: 0,
+                            InitialStock: 0,
+                            Status: "Error",
+                            ErrorMessage: loserMsg,
+                            SheetName: loser.SheetName
                         ));
-                        newCount++;
+                        errorCount++;
                     }
                 }
             }
+
+            // Tablodaki satırları orijinal Excel satır sırasına göre hizala
+            items = items.OrderBy(x => x.SheetName).ThenBy(x => x.RowNumber).ToList();
 
             return new ProductImportPreviewResult(
                 TotalRows: items.Count,
@@ -1301,7 +1423,13 @@ public class ProductService(IErpDbContext db, IProductCategorizationDbService ca
         int updatedCount = 0;
         int skippedCount = 0;
 
-        foreach (var item in request.Items)
+        // Çift gönderim veya mükerrer satır seçimlerinde aynı barkodun sonuncusunu/güncelini esas alarak çakışmayı önle
+        var distinctItems = request.Items
+            .GroupBy(x => CleanBarcode(!string.IsNullOrWhiteSpace(x.Barcode) ? x.Barcode : x.Code, true), StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.Last())
+            .ToList();
+
+        foreach (var item in distinctItems)
         {
             var rawBarcode = !string.IsNullOrWhiteSpace(item.Barcode) ? item.Barcode : item.Code;
             var barcode = CleanBarcode(rawBarcode, settings.SanitizeBarcode);
@@ -1763,27 +1891,69 @@ public class ProductService(IErpDbContext db, IProductCategorizationDbService ca
         return Regex.Replace(trimmed, @"[\s\-\.]", "");
     }
 
-    private static decimal ParseDecimalCell(IXLCell cell)
+    private sealed class ParsedRowCandidate
+    {
+        public int RowNumber { get; set; }
+        public string SheetName { get; set; } = string.Empty;
+        public string CleanBarcode { get; set; } = string.Empty;
+        public string RawBarcode { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public decimal SalePrice { get; set; }
+        public decimal PurchasePrice { get; set; }
+        public bool IsSalePriceExplicit { get; set; }
+        public bool IsPurchasePriceExplicit { get; set; }
+        public bool HasDirectPrice => (IsSalePriceExplicit && SalePrice > 0) || (IsPurchasePriceExplicit && PurchasePrice > 0);
+        public bool IsSetRow { get; set; }
+    }
+
+    private static (decimal Price, bool IsExplicit) ParseDecimalCellWithInfo(IXLCell cell)
     {
         var val = ParseDecimalCellValue(cell);
-        if (val > 0) return val;
+        if (val > 0)
+        {
+            return (val, true);
+        }
 
-        // Birleştirilmiş hücre kontrolü: Eğer hücre boşsa veya 0 ise ama birleştirilmiş bir alanın parçasıysa,
-        // o birleşimin ilk hücresindeki (tepedeki) fiyatı otomatik devral
+        // Birleştirilmiş hücre kontrolü: Eğer hücre boşsa veya 0 ise ama birleştirilmiş bir alanın parçasıysa
         if (cell.IsMerged())
         {
             var mr = cell.MergedRange();
             if (mr != null)
             {
                 var firstCell = mr.FirstCell();
-                if (firstCell.Address != cell.Address)
+                var mergedVal = ParseDecimalCellValue(firstCell);
+                if (mergedVal > 0)
                 {
-                    return ParseDecimalCellValue(firstCell);
+                    bool isFirstCell = cell.Address.RowNumber == firstCell.Address.RowNumber &&
+                                       cell.Address.ColumnNumber == firstCell.Address.ColumnNumber;
+                    return (mergedVal, isFirstCell);
                 }
             }
         }
 
-        return 0;
+        return (0, false);
+    }
+
+    private static decimal ParseDecimalCell(IXLCell cell)
+    {
+        return ParseDecimalCellWithInfo(cell).Price;
+    }
+
+    private static bool CheckIfRowIsSet(IXLRow row, string name)
+    {
+        if (IsSetIndicator(name)) return true;
+        foreach (var c in row.CellsUsed())
+        {
+            if (IsSetIndicator(c.GetString())) return true;
+        }
+        return false;
+    }
+
+    private static bool IsSetIndicator(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var norm = NormalizeTurkish(text);
+        return norm.Contains("set") || norm.Contains("paket") || norm.Contains("kutulu");
     }
 
     private static decimal ParseDecimalCellValue(IXLCell cell)

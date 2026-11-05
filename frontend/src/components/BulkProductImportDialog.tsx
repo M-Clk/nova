@@ -35,9 +35,12 @@ import {
   Tab,
   TextField,
   Autocomplete,
-  Checkbox
+  Checkbox,
+  InputAdornment
 } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
+import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
 import ViewColumnOutlinedIcon from "@mui/icons-material/ViewColumnOutlined";
 import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
 import SyncAltOutlinedIcon from "@mui/icons-material/SyncAltOutlined";
@@ -131,7 +134,8 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
   };
 
   const [duplicateAction, setDuplicateAction] = useState<"update" | "skip" | "fail">("update");
-  const [filterStatus, setFilterStatus] = useState<"all" | "New" | "Existing" | "Unchanged" | "Error">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "New" | "Existing" | "Unchanged" | "Error" | "selected">("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [previewResult, setPreviewResult] = useState<ProductImportPreviewResult | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
   const [commitResult, setCommitResult] = useState<ProductImportResult | null>(null);
@@ -158,6 +162,7 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
     setApplyBrandCategoryToExisting(false);
     setDuplicateAction("update");
     setFilterStatus("all");
+    setSearchQuery("");
     setPreviewResult(null);
     setSelectedRowKeys(new Set());
     setCommitResult(null);
@@ -306,9 +311,34 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
 
   // Filtrelenmiş önizleme satırları
   const displayedRows = useMemo(() => {
-    if (filterStatus === "all") return rowsWithIndex;
-    return rowsWithIndex.filter(r => r.status === filterStatus);
-  }, [rowsWithIndex, filterStatus]);
+    let rows = rowsWithIndex;
+
+    // 1. Durum filtresi
+    if (filterStatus === "selected") {
+      rows = rows.filter(r => {
+        const key = `${r.sheetName || ""}_${r.rowNumber}_${r.originalIndex}`;
+        return selectedRowKeys.has(key);
+      });
+    } else if (filterStatus !== "all") {
+      rows = rows.filter(r => r.status === filterStatus);
+    }
+
+    // 2. Arama metni filtresi (barkod, ad, kategori, marka, sayfa veya satır no)
+    const q = searchQuery.trim().toLocaleLowerCase("tr");
+    if (q) {
+      rows = rows.filter(r => {
+        const matchName = r.name?.toLocaleLowerCase("tr").includes(q);
+        const matchBarcode = r.barcode?.toLocaleLowerCase("tr").includes(q) || r.code?.toLocaleLowerCase("tr").includes(q);
+        const matchBrand = r.brandName?.toLocaleLowerCase("tr").includes(q) || r.suggestedBrandName?.toLocaleLowerCase("tr").includes(q);
+        const matchCategory = r.categoryName?.toLocaleLowerCase("tr").includes(q) || r.suggestedCategoryName?.toLocaleLowerCase("tr").includes(q);
+        const matchSheet = r.sheetName?.toLocaleLowerCase("tr").includes(q);
+        const matchRow = r.rowNumber.toString().includes(q);
+        return matchName || matchBarcode || matchBrand || matchCategory || matchSheet || matchRow;
+      });
+    }
+
+    return rows;
+  }, [rowsWithIndex, filterStatus, searchQuery, selectedRowKeys]);
 
   // Toplam seçili geçerli (hata olmayan) satır sayısı
   const selectedCount = useMemo(() => {
@@ -1106,47 +1136,80 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
 
               {/* Tablo Filtreleri & Liste Başlığı */}
               <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: "background.paper" }}>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }} justifyContent="space-between">
-                  <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
-                    <Typography variant="subtitle2" fontWeight={800}>
-                      Önizleme Listesi ({displayedRows.length} Satır Gösteriliyor
-                      {selectedSheet ? ` — Sayfa: ${selectedSheet}` : previewResult.availableSheets && previewResult.availableSheets.length > 1 ? ` — Tüm Sayfalar (${previewResult.availableSheets.length})` : ""})
-                    </Typography>
-                    <Chip
-                      label={`Seçili: ${selectedCount} / ${previewResult.rows.filter(r => r.status !== "Error").length}`}
+                <Stack spacing={1.5}>
+                  {/* Üst Satır: Başlık, Seçim Sayacı, Seçim Butonları ve Arama Kutusu */}
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} alignItems={{ md: "center" }} justifyContent="space-between">
+                    <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                      <Typography variant="subtitle2" fontWeight={800}>
+                        Önizleme Listesi ({displayedRows.length} / {previewResult.totalRows} Satır
+                        {selectedSheet ? ` — Sayfa: ${selectedSheet}` : previewResult.availableSheets && previewResult.availableSheets.length > 1 ? ` — Tüm Sayfalar` : ""})
+                      </Typography>
+                      <Chip
+                        label={`Seçili: ${selectedCount} / ${previewResult.rows.filter(r => r.status !== "Error").length}`}
+                        size="small"
+                        color={selectedCount > 0 ? "primary" : "default"}
+                        variant={selectedCount > 0 ? "filled" : "outlined"}
+                        sx={{ fontWeight: 700, height: 24 }}
+                      />
+                      {selectedCount < previewResult.rows.filter(r => r.status !== "Error").length && (
+                        <Button
+                          size="small"
+                          onClick={selectAllValid}
+                          sx={{ textTransform: "none", py: 0, px: 1, minHeight: 24, fontSize: "0.75rem", fontWeight: 700 }}
+                        >
+                          Tümünü Seç
+                        </Button>
+                      )}
+                      {selectedCount > 0 && (
+                        <Button
+                          size="small"
+                          color="inherit"
+                          onClick={deselectAllValid}
+                          sx={{ textTransform: "none", py: 0, px: 1, minHeight: 24, fontSize: "0.75rem", color: "text.secondary" }}
+                        >
+                          Seçimi Temizle
+                        </Button>
+                      )}
+                    </Stack>
+
+                    {/* Arama Kutusu */}
+                    <TextField
                       size="small"
-                      color={selectedCount > 0 ? "primary" : "default"}
-                      variant={selectedCount > 0 ? "filled" : "outlined"}
-                      sx={{ fontWeight: 700, height: 24 }}
+                      placeholder="Barkod, ürün adı, marka, kategori ara..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      sx={{ minWidth: { xs: "100%", md: 320 } }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: searchQuery ? (
+                          <InputAdornment position="end">
+                            <IconButton size="small" onClick={() => setSearchQuery("")} edge="end">
+                              <ClearIcon fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null
+                      }}
                     />
-                    {selectedCount < previewResult.rows.filter(r => r.status !== "Error").length && (
-                      <Button
-                        size="small"
-                        onClick={selectAllValid}
-                        sx={{ textTransform: "none", py: 0, px: 1, minHeight: 24, fontSize: "0.75rem", fontWeight: 700 }}
-                      >
-                        Tümünü Seç
-                      </Button>
-                    )}
-                    {selectedCount > 0 && (
-                      <Button
-                        size="small"
-                        color="inherit"
-                        onClick={deselectAllValid}
-                        sx={{ textTransform: "none", py: 0, px: 1, minHeight: 24, fontSize: "0.75rem", color: "text.secondary" }}
-                      >
-                        Seçimi Temizle
-                      </Button>
-                    )}
                   </Stack>
+
+                  <Divider sx={{ borderStyle: "dashed" }} />
+
+                  {/* Alt Satır: Durum ve Hızlı Filtre Butonları */}
                   <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", mr: 0.5 }}>
+                      Filtrele:
+                    </Typography>
                     <Chip
                       label={`Tümü (${previewResult.totalRows})`}
                       size="small"
                       variant={filterStatus === "all" ? "filled" : "outlined"}
                       color="default"
                       onClick={() => setFilterStatus("all")}
-                      sx={{ fontWeight: 700 }}
+                      sx={{ fontWeight: 700, cursor: "pointer" }}
                     />
                     <Chip
                       label={`Yeni (${previewResult.newCount})`}
@@ -1154,7 +1217,7 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
                       variant={filterStatus === "New" ? "filled" : "outlined"}
                       color="success"
                       onClick={() => setFilterStatus("New")}
-                      sx={{ fontWeight: 700 }}
+                      sx={{ fontWeight: 700, cursor: "pointer" }}
                     />
                     <Chip
                       label={`Fiyatı Değişecek (${previewResult.existingCount})`}
@@ -1162,7 +1225,7 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
                       variant={filterStatus === "Existing" ? "filled" : "outlined"}
                       color="warning"
                       onClick={() => setFilterStatus("Existing")}
-                      sx={{ fontWeight: 700 }}
+                      sx={{ fontWeight: 700, cursor: "pointer" }}
                     />
                     {(previewResult.unchangedCount ?? 0) > 0 && (
                       <Chip
@@ -1171,18 +1234,41 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
                         variant={filterStatus === "Unchanged" ? "filled" : "outlined"}
                         color="info"
                         onClick={() => setFilterStatus("Unchanged")}
-                        sx={{ fontWeight: 700 }}
+                        sx={{ fontWeight: 700, cursor: "pointer" }}
                       />
                     )}
                     {previewResult.errorCount > 0 && (
                       <Chip
-                        label={`Hatalı (${previewResult.errorCount})`}
+                        label={`Hatalı / Mükerrer (${previewResult.errorCount})`}
                         size="small"
                         variant={filterStatus === "Error" ? "filled" : "outlined"}
                         color="error"
                         onClick={() => setFilterStatus("Error")}
-                        sx={{ fontWeight: 800 }}
+                        sx={{ fontWeight: 800, cursor: "pointer" }}
                       />
+                    )}
+                    <Chip
+                      icon={<CheckCircleOutlineIcon fontSize="small" />}
+                      label={`Sadece Seçililer (${selectedCount})`}
+                      size="small"
+                      variant={filterStatus === "selected" ? "filled" : "outlined"}
+                      color="primary"
+                      onClick={() => setFilterStatus(filterStatus === "selected" ? "all" : "selected")}
+                      sx={{ fontWeight: 700, cursor: "pointer" }}
+                    />
+
+                    {(filterStatus !== "all" || searchQuery) && (
+                      <Button
+                        size="small"
+                        color="inherit"
+                        onClick={() => {
+                          setFilterStatus("all");
+                          setSearchQuery("");
+                        }}
+                        sx={{ textTransform: "none", fontSize: "0.75rem", py: 0, px: 1, minHeight: 24, ml: 1, color: "text.secondary" }}
+                      >
+                        Filtreleri Sıfırla
+                      </Button>
                     )}
                   </Stack>
                 </Stack>
@@ -1208,7 +1294,7 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
                       </TableCell>
                       <TableCell sx={{ fontWeight: 700, width: 50 }}>Satır</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Barkod / Kod</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Ürün Adı</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 260 }}>Ürün Adı</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Kategori</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Marka</TableCell>
                       <TableCell sx={{ fontWeight: 700 }} align="right">Alış Fiyatı</TableCell>
@@ -1217,7 +1303,30 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {displayedRows.map((r) => {
+                    {displayedRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                          <Typography variant="body1" fontWeight={600} color="text.secondary" gutterBottom>
+                            Filtreye uygun ürün bulunamadı
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Arama teriminizi veya durum filtresini değiştirerek tekrar deneyebilirsiniz.
+                          </Typography>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            sx={{ mt: 1.5, textTransform: "none" }}
+                            onClick={() => {
+                              setSearchQuery("");
+                              setFilterStatus("all");
+                            }}
+                          >
+                            Filtreleri Sıfırla
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      displayedRows.map((r) => {
                       const isNew = r.status === "New";
                       const isExisting = r.status === "Existing";
                       const isUnchanged = r.status === "Unchanged";
@@ -1274,15 +1383,34 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
                             )}
                           </TableCell>
                           <TableCell sx={{ fontWeight: 700, fontFamily: "monospace" }}>{r.barcode || r.code || "—"}</TableCell>
-                          <TableCell sx={{ maxWidth: 240 }}>
+                          <TableCell sx={{ minWidth: 260, maxWidth: 500 }}>
                             <Typography
                               variant="body2"
-                              noWrap
                               title={r.name}
-                              sx={{ textDecoration: !isSelected && !isError ? "line-through" : "none" }}
+                              sx={{
+                                whiteSpace: "normal",
+                                wordBreak: "break-word",
+                                fontWeight: 500,
+                                lineHeight: 1.4,
+                                textDecoration: !isSelected && !isError ? "line-through" : "none"
+                              }}
                             >
                               {r.name || "—"}
                             </Typography>
+                            {r.errorMessage && !isError && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: "primary.main",
+                                  display: "block",
+                                  fontSize: "0.72rem",
+                                  lineHeight: 1.25,
+                                  mt: 0.3
+                                }}
+                              >
+                                {r.errorMessage}
+                              </Typography>
+                            )}
                           </TableCell>
                           <TableCell>
                             {trCategory && overrideAppliesTo(r.status) ? (
@@ -1355,28 +1483,48 @@ export const BulkProductImportDialog: React.FC<BulkProductImportDialogProps> = (
                           </TableCell>
                           <TableCell align="center">
                             {isError ? (
-                              <Tooltip title={r.errorMessage || "Hatalı Satır"}>
-                                <Chip label="Hata" size="small" color="error" sx={{ fontWeight: 700, height: 22 }} />
-                              </Tooltip>
+                              r.errorMessage?.toLowerCase().includes("mükerrer") ? (
+                                <Tooltip title={r.errorMessage}>
+                                  <Chip
+                                    label="Mükerrer (Ekarte)"
+                                    size="small"
+                                    variant="outlined"
+                                    color="default"
+                                    sx={{
+                                      fontWeight: 600,
+                                      height: 22,
+                                      bgcolor: "action.hover",
+                                      color: "text.secondary",
+                                      borderStyle: "dashed"
+                                    }}
+                                  />
+                                </Tooltip>
+                              ) : (
+                                <Tooltip title={r.errorMessage || "Hatalı Satır"}>
+                                  <Chip label="Hata" size="small" color="error" sx={{ fontWeight: 700, height: 22 }} />
+                                </Tooltip>
+                              )
                             ) : !isSelected ? (
                               <Tooltip title="Bu ürün içe aktarma işlemine dahil edilmeyecek">
                                 <Chip label="Hariç Tutuldu" size="small" variant="outlined" sx={{ fontWeight: 600, height: 22, color: "text.disabled", borderColor: "divider" }} />
                               </Tooltip>
                             ) : isNew ? (
-                              <Chip label="Yeni" size="small" color="success" sx={{ fontWeight: 700, height: 22 }} />
+                              <Tooltip title={r.errorMessage || "Sisteme yeni eklenecek ürün"}>
+                                <Chip label="Yeni" size="small" color="success" sx={{ fontWeight: 700, height: 22 }} />
+                              </Tooltip>
                             ) : isExisting ? (
                               <Tooltip title={r.errorMessage || "Fiyat değişimi tespit edildi"}>
                                 <Chip label="Fiyat Değişecek" size="small" color="warning" sx={{ fontWeight: 700, height: 22 }} />
                               </Tooltip>
                             ) : isUnchanged ? (
-                              <Tooltip title="Fiyat sistemdeki mevcut fiyatla aynı">
+                              <Tooltip title={r.errorMessage || "Fiyat sistemdeki mevcut fiyatla aynı"}>
                                 <Chip label="Fiyatı Aynı" size="small" color="default" sx={{ fontWeight: 600, height: 22 }} />
                               </Tooltip>
                             ) : null}
                           </TableCell>
                         </TableRow>
                       );
-                    })}
+                    }))}
                   </TableBody>
                 </Table>
               </TableContainer>
